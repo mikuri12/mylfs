@@ -1,0 +1,14 @@
+# base/sources-extra.stage3.tsv
+# Fuentes EXTRA del PLAN (no en el libro 12.4): PAM, shadow-PAM deps, eudev,
+# openssh, opendoas, dhcpcd, chrony, acpid, curl, ca-certificates, dracut.
+# Columnas: sha256 <TAB> archivo <TAB> URL <TAB> fuente del checksum
+21dbcec6e01dd578f14789eac9024a18941e6f2702a05cf91b28c232eeb26ab0	Linux-PAM-1.7.1.tar.xz	https://github.com/linux-pam/linux-pam/releases/download/v1.7.1/Linux-PAM-1.7.1.tar.xz	md5 BLFS 12.4: 92812d7dd414d816fba8d649e84e68ca
+021a2e709a0edf4250b1256bd5a9e500411a90dddabea830ed59cef90eb9d85c	openssh-10.0p1.tar.gz	https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.0p1.tar.gz	md5 BLFS 12.4: 689148621a2eaa734497b12bed1c5202
+2d095c8cfcbc847caec746d62cdc8d0bff1ec1bc72ef7c674c721e04da6ab333	acpid-2.0.34.tar.xz	https://downloads.sourceforge.net/acpid2/acpid-2.0.34.tar.xz	md5 BLFS 12.4: 988c2e3fd5ba0ea4492d3ba7273af295
+6721e606609226dbf4d864a78802a9e96beec0ee034a1bd84138b3e037bba7d9	dhcpcd-10.2.4.tar.xz	https://github.com/NetworkConfiguration/dhcpcd/releases/download/v10.2.4/dhcpcd-10.2.4.tar.xz	md5 BLFS 12.4: ce62bc6caf02421ac40135dbb92377b5
+6cd0a8a5b126ddfda61c94dc2c3fc53481ba7a35461cf7c5ab66aa9d6775b609	curl-8.15.0.tar.xz	https://curl.se/download/curl-8.15.0.tar.xz	md5 BLFS 12.4: b8872bb6cc5d18d03bea8ff5090b2b81
+6da058a0e70b7543bc60624389b0b00b686189ec933828c522bf8b2600495a67	OpenDoas-6.8.2.tar.gz	https://github.com/Duncaen/OpenDoas/archive/refs/tags/v6.8.2.tar.gz	sha256 void-packages opendoas template: 6da058a0e70b7543bc60624389b0b00b686189ec933828c522bf8b2600495a67
+eb69809fc0d1187f2463ab2149c53aa9f42a78e59f14ebea68eae6cb6b4fc1c3	eudev-3.2.15.tar.gz	https://github.com/gentoo/eudev/releases/download/v3.2.15/eudev-3.2.15.tar.gz	sha256 del release oficial gentoo/eudev (descarga verificada 2026-10-15)
+19fe1d9f4664d445a69a96c71e8fdb60bcd8df24c73d1386e02287f7366ad422	chrony-4.5.tar.gz	https://download.tuxfamily.org/chrony/chrony-4.5.tar.gz	sha256 verificada de la descarga oficial tuxfamily (2026-10-15); .asc disponible en el mismo dir
+839d21eb4bd27bb0ee40d74c9da46df088c2e1425fcd8c3ea62b7e3a3dd28a91	dracut-112.tar.gz	https://github.com/dracut-ng/dracut/archive/refs/tags/112.tar.gz	sha256 del tarball release dracut-ng 112 (2026-08-02)
+a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505	cacert-2026-09-25.pem	https://curl.se/ca/cacert-2026-09-25.pem	extracto oficial Mozilla mantenido por curl.se

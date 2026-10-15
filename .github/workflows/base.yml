@@ -135,3 +135,63 @@ jobs:
         run: |
           sudo du -sh "$LFS/usr" 2>/dev/null || true
           df -h /
+
+  stage3-base:
+    needs: [stage2-chroot]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      LFS: /mnt/lfs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Estado del disco y liberación de espacio
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/bin/google-chrome* 2>/dev/null || true
+          sudo docker image prune -a -f >/dev/null 2>&1 || true
+          df -h /
+
+      - name: Descargar artifact de la etapa 2
+        uses: actions/download-artifact@v4
+        with:
+          name: lfs-stage2
+          path: incoming
+
+      - name: Restaurar $LFS desde el tarball de la etapa 2
+        run: |
+          sudo tar --zstd -xpf incoming/lfs-stage2.tar.zst -C /mnt --numeric-owner --keep-directory-symlink
+          rm -f incoming/lfs-stage2.tar.zst
+          sudo ls /mnt/lfs
+          df -h /mnt
+
+      - name: Descargar fuentes etapa 3 (manifiestos sha256)
+        run: |
+          sudo bash base/download-sources.sh base/sources-12.4.stage3.tsv
+          sudo bash base/download-sources.sh base/sources-extra.stage3.tsv
+
+      - name: Etapa 3 — sistema base final (LFS cap. 8 + extras del PLAN)
+        run: sudo bash base/ch08.sh
+
+      - name: Empaquetar $LFS como tarball (estado para etapa 4)
+        run: |
+          sudo mkdir -p /mnt/dist
+          sudo tar --zstd -cpf /mnt/dist/lfs-stage3.tar.zst -C /mnt lfs --numeric-owner --keep-directory-symlink
+          sudo chown runner:runner /mnt/dist/lfs-stage3.tar.zst
+          zstd -t /mnt/dist/lfs-stage3.tar.zst
+          ls -la /mnt/dist/
+
+      - name: Subir artifact (retention 1 día, PLAN)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lfs-stage3
+          path: /mnt/dist/lfs-stage3.tar.zst
+          retention-days: 1
+          compression-level: 0
+
+      - name: Informe final
+        run: |
+          sudo du -sh "$LFS/usr" "$LFS/lib" 2>/dev/null || true
+          df -h /
