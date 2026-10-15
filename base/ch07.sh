@@ -45,9 +45,14 @@ pkg() {
 
 # ---------------------------------------------------------------------------
 # §7.2 Cambiar propietario: todo a root:root (era de lfs)
+# NOTA CI: el usuario 'lfs' del job stage1 no existe en este runner; el tarball
+# guarda UIDs numéricos. Resolvemos el UID real de $LFS/tools y chown desde ahí.
 # ---------------------------------------------------------------------------
 step "chown root:root \$LFS (§7.2)"
-chown --from lfs -R root:root "$LFS"/{usr,var,etc,tools,lib64}
+LFS_UID="$(stat -c '%u' "$LFS/tools")"
+LFS_GID="$(stat -c '%g' "$LFS/tools")"
+step "propietario actual de \$LFS/tools: uid=$LFS_UID gid=$LFS_GID"
+chown --from "$LFS_UID:$LFS_GID" -R root:root "$LFS"/{usr,var,etc,tools,lib64}
 chown -R root:root "$LFS/sources" "$LFS/bin" "$LFS/lib" "$LFS/sbin" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
@@ -66,7 +71,7 @@ else
     mount -vt tmpfs -o nosuid,nodev tmpfs "$LFS/dev/shm"
 fi
 
-trap 'umount -v "$LFS/dev/pts" "$LFS"/{sys,proc,run,dev} "$LFS/dev/shm" 2>/dev/null || true' EXIT
+trap 'umount -v "$LFS/dev/pts" "$LFS/dev/shm" "$LFS/sys" "$LFS/proc" "$LFS/run" "$LFS/dev" 2>/dev/null || true' EXIT
 
 # ---------------------------------------------------------------------------
 # §7.6/7.7 (dirs completos + archivos esenciales) — DENTRO del chroot
