@@ -1,0 +1,78 @@
+name: base
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'base/**'
+      - 'kernel/**'
+      - '.github/workflows/base.yml'
+  workflow_dispatch:
+
+# PLAN: un job por etapa, needs encadenados, ninguno > 5 h, artifact tarball
+# con retention-days: 1. Estado entre jobs como tarball --zstd --numeric-owner.
+
+permissions:
+  contents: write
+
+jobs:
+  stage1-toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      LFS: /mnt/lfs
+      # Ajustes del PLAN (make.conf.sh):
+      CCACHE_DIR: /mnt/work/ccache
+      CCACHE_MAXSIZE: 2G
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Estado del disco y liberación de espacio
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/bin/google-chrome* 2>/dev/null || true
+          sudo docker image prune -a -f >/dev/null 2>&1 || true
+          df -h /
+
+      - name: Crear usuario lfs y layout (LFS 12.4 §4.3-4.4, §5.1)
+        run: bash base/setup-user.sh
+
+      - name: Preflight del host (LFS 12.4 §2.2 version-check)
+        run: |
+          # El libro exige: sh→bash, awk→gawk, yacc→bison
+          sudo ln -sf bash /bin/sh
+          sudo ln -sf gawk /usr/bin/awk
+          sudo ln -sf bison /usr/bin/yacc
+          bash base/version-check.sh
+
+      - name: Descargar y verificar fuentes (manifiesto sha256)
+        run: bash base/download-sources.sh
+
+      - name: Etapa 1 — toolchain temporal (LFS caps. 5-6)
+        run: bash base/ch05.sh
+
+      - name: Empaquetar $LFS como tarball (estado para etapa 2)
+        run: |
+          cd /mnt
+          mkdir -p dist
+          tar --zstd -cpf dist/lfs-stage1.tar.zst lfs --numeric-owner --keep-directory-symlink
+          zstd -t dist/lfs-stage1.tar.zst
+          ls -la dist/
+
+      - name: Subir artifact (retention 1 día, PLAN)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lfs-stage1
+          path: /mnt/dist/lfs-stage1.tar.zst
+          retention-days: 1
+          compression-level: 0
+
+      - name: Informe final
+        run: |
+          du -sh "$LFS/tools" "$LFS/usr" 2>/dev/null || true
+          df -h /
+
+  # La etapa 2 (cap. 7) se añade como job con `needs: [stage1-toolchain]`
+  # tras el OK del usuario sobre esta etapa (PLAN: una etapa a la vez).

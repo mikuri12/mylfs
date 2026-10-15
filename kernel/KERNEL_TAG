@@ -1,0 +1,7 @@
+# Kernel precompilado del usuario (repo mikuri12/mikuri-kernel).
+# Verificado 2026-10-15: release existe, tarball descargado, sha256 OK.
+# No se compila aquí (PLAN: "Kernel (mío, no lo compiles)").
+# tarball: mikuri-kernel-7.1.5-mikuri.tar.gz (54 MB) con boot/{vmlinuz,System.map,config}
+# y usr/lib/modules/7.1.5-mikuri/ (sin headers; ver DECISIONS).
+v7.1.5-mikuri
+sha256:cf5fe27099311b9b7277f9df6f3eb6a81cacf08bc554d29678bd99c2de90372c
