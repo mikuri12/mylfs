@@ -63,8 +63,7 @@ cd /sources
 rm -rf iana-etc-20250807
 tar -xpf iana-etc-20250807.tar.gz
 cd iana-etc-20250807
-cp -v services/protocols /etc
-cp -v services/services /etc
+cp services protocols /etc
 EOF
 
 # ============================================================================
@@ -264,7 +263,7 @@ cd /sources
 rm -rf flex-2.6.4
 tar -xpf flex-2.6.4.tar.gz
 cd flex-2.6.4
-./configure --prefix=/usr --docdir=/usr/share/doc/flex-2.6.4
+./configure --prefix=/usr --docdir=/usr/share/doc/flex-2.6.4 --disable-static
 make
 make install
 ln -sfv flex /usr/bin/lex
