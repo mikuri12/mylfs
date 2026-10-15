@@ -76,7 +76,7 @@ trap 'umount -v "$LFS/dev/pts" "$LFS/dev/shm" "$LFS/sys" "$LFS/proc" "$LFS/run" 
 # ---------------------------------------------------------------------------
 # §7.6/7.7 (dirs completos + archivos esenciales) — DENTRO del chroot
 # ---------------------------------------------------------------------------
-pkg creating-files <<'EOF'
+pkg creating-files <<'CH07-EOF'
 set -euo pipefail
 # §7.6 creatingdirs (dentro de chroot las rutas son /, no $LFS)
 mkdir -pv /{boot,home,mnt,opt,srv}
@@ -142,7 +142,7 @@ touch /var/log/{btmp,lastlog,faillog,wtmp}
 chgrp -v utmp /var/log/lastlog
 chmod -v 664 /var/log/lastlog
 chmod -v 600 /var/log/btmp
-EOF
+CH07-EOF
 
 # ---------------------------------------------------------------------------
 # §7.8 Gettext (solo msgfmt, msgmerge, xgettext)
