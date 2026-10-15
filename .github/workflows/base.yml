@@ -57,9 +57,8 @@ jobs:
 
       - name: Empaquetar $LFS como tarball (estado para etapa 2)
         run: |
-          cd /mnt
-          mkdir -p dist
-          sudo tar --zstd -cpf /mnt/dist/lfs-stage1.tar.zst lfs --numeric-owner --keep-directory-symlink
+          sudo mkdir -p /mnt/dist
+          sudo tar --zstd -cpf /mnt/dist/lfs-stage1.tar.zst -C /mnt lfs --numeric-owner --keep-directory-symlink
           sudo chown runner:runner /mnt/dist/lfs-stage1.tar.zst
           zstd -t /mnt/dist/lfs-stage1.tar.zst
           ls -la /mnt/dist/
