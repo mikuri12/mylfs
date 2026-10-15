@@ -41,6 +41,24 @@ pkg() {
     step "$name OK"
 }
 
+# ---------------------------------------------------------------------------
+# §7.3 vfs virtuales ANTES del primer chroot de la etapa (el libro los exige;
+# sin /dev/null y devpts los builds explotan — bug del run 38808354088)
+# ---------------------------------------------------------------------------
+step "vfs virtuales (§7.3)"
+mkdir -pv "$LFS"/{dev,proc,sys,run} "$LFS/dev/pts" "$LFS/dev/shm"
+mount -v --bind /dev "$LFS/dev"
+mount -vt devpts devpts -o gid=5,mode=0620 "$LFS/dev/pts"
+mount -vt proc proc "$LFS/proc"
+mount -vt sysfs sysfs "$LFS/sys"
+mount -vt tmpfs tmpfs "$LFS/run"
+if [ -h "$LFS/dev/shm" ]; then
+    install -v -d -m 1777 "$LFS$(realpath /dev/shm)"
+else
+    mount -vt tmpfs -o nosuid,nodev tmpfs "$LFS/dev/shm"
+fi
+trap 'umount -v "$LFS/dev/pts" "$LFS/dev/shm" "$LFS/sys" "$LFS/proc" "$LFS/run" "$LFS/dev" 2>/dev/null || true' EXIT
+
 # ============================================================================
 # §8.3 Linux man-pages
 # ============================================================================
@@ -78,29 +96,30 @@ rm -rf glibc-2.42
 tar -xpf glibc-2.42.tar.xz
 cd glibc-2.42
 patch -Np1 -i ../glibc-2.42-fhs-1.patch
+# Fix Valgrind (§8.5 del libro)
+sed -e '/unistd.h/i #include <string.h>' \
+    -e '/libc_rwlock_init/c\
+  __libc_rwlock_define_initialized (, reset_lock);\
+  memcpy (&lock, &reset_lock, sizeof (lock));' \
+    -i stdlib/abort.c
 mkdir -v build
 cd       build
 echo "rootsbindir=/usr/sbin" > configparms
-../configure --prefix=/usr \
-             --disable-werror \
-             --enable-kernel=5.4 \
+../configure --prefix=/usr                   \
+             --disable-werror                \
+             --disable-nscd                  \
+             libc_cv_slibdir=/usr/lib        \
              --enable-stack-protector=strong \
-             --disable-nscd \
-             libc_cv_slibdir=/usr/lib
+             --enable-kernel=5.4
 make
 touch /etc/ld.so.conf
 sed '/test-installation/s@$(PERL)@echo not running@' -i ../Makefile
-make DESTDIR=/ install
+make install
 sed '/RTLDLIST=/s@/usr@@g' -i /usr/bin/ldd
 # Locale en_US.UTF-8 (PLAN: variables editables; resto de locales NO)
 mkdir -p /usr/lib/locale
 localedef -i en_US -f UTF-8 en_US.UTF-8 || { echo "localedef falló"; exit 1; }
-# /etc/profile básico (el libro lo hace en cap. 9; lo adelantamos mínimo)
-cat > /etc/profile << 'PROFILE'
-export LANG=en_US.UTF-8
-export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin
-PROFILE
-# /etc/nsswitch.conf (§8.5 configuración)
+# /etc/nsswitch.conf (§8.5.1 configuración del libro)
 cat > /etc/nsswitch.conf << 'NSS'
 passwd: files
 group: files
@@ -119,7 +138,6 @@ mkdir -p $ZONEINFO/posix
 cp -rv /tmp/usr/share/zoneinfo/. $ZONEINFO/
 cp -v $ZONEINFO/America/Guatemala /etc/localtime
 echo "America/Guatemala" > /etc/timezone
-# Con tzdata ya extraído del tarball, limpiar
 rm -rf /tmp/usr
 EOF
 
