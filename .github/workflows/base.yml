@@ -26,7 +26,7 @@ jobs:
       CCACHE_MAXSIZE: 2G
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Estado del disco y liberación de espacio
         run: |
@@ -36,8 +36,10 @@ jobs:
           sudo docker image prune -a -f >/dev/null 2>&1 || true
           df -h /
 
+      # El runner NO es root (usuario 'runner' + sudo): los pasos que crean
+      # usuarios, montan o escriben en /mnt/lfs van con sudo.
       - name: Crear usuario lfs y layout (LFS 12.4 §4.3-4.4, §5.1)
-        run: bash base/setup-user.sh
+        run: sudo bash base/setup-user.sh
 
       - name: Preflight del host (LFS 12.4 §2.2 version-check)
         run: |
@@ -48,18 +50,19 @@ jobs:
           bash base/version-check.sh
 
       - name: Descargar y verificar fuentes (manifiesto sha256)
-        run: bash base/download-sources.sh
+        run: sudo bash base/download-sources.sh
 
       - name: Etapa 1 — toolchain temporal (LFS caps. 5-6)
-        run: bash base/ch05.sh
+        run: sudo bash base/ch05.sh
 
       - name: Empaquetar $LFS como tarball (estado para etapa 2)
         run: |
           cd /mnt
           mkdir -p dist
-          tar --zstd -cpf dist/lfs-stage1.tar.zst lfs --numeric-owner --keep-directory-symlink
-          zstd -t dist/lfs-stage1.tar.zst
-          ls -la dist/
+          sudo tar --zstd -cpf /mnt/dist/lfs-stage1.tar.zst lfs --numeric-owner --keep-directory-symlink
+          sudo chown runner:runner /mnt/dist/lfs-stage1.tar.zst
+          zstd -t /mnt/dist/lfs-stage1.tar.zst
+          ls -la /mnt/dist/
 
       - name: Subir artifact (retention 1 día, PLAN)
         uses: actions/upload-artifact@v4
@@ -71,7 +74,7 @@ jobs:
 
       - name: Informe final
         run: |
-          du -sh "$LFS/tools" "$LFS/usr" 2>/dev/null || true
+          sudo du -sh "$LFS/tools" "$LFS/usr" 2>/dev/null || true
           df -h /
 
   # La etapa 2 (cap. 7) se añade como job con `needs: [stage1-toolchain]`
