@@ -131,14 +131,27 @@ services: files
 ethers: files
 rpc: files
 NSS
-# Timezone America/Guatemala (PLAN)
-tar -xpf /sources/tzdata2025b.tar.gz -C /tmp
+# Timezone America/Guatemala (PLAN) — zic como manda §9.1 del libro
+cd /sources
+rm -rf tzdata-2025b
+mkdir tzdata-2025b
+tar -xpf tzdata2025b.tar.gz -C tzdata-2025b
+cd tzdata-2025b
 ZONEINFO=/usr/share/zoneinfo
-mkdir -p $ZONEINFO/posix
-cp -rv /tmp/usr/share/zoneinfo/. $ZONEINFO/
+mkdir -pv $ZONEINFO/{posix,right}
+for tz in etcetera southamerica northamerica europe africa antarctica  \
+          asia australasia backward; do
+    zic -L /dev/null   -d $ZONEINFO       ${tz}
+    zic -L /dev/null   -d $ZONEINFO/posix ${tz}
+    zic -L leapseconds -d $ZONEINFO/right ${tz}
+done
+cp -v zone.tab zone1970.tab iso3166.tab $ZONEINFO
+zic -d $ZONEINFO -p America/New_York
 cp -v $ZONEINFO/America/Guatemala /etc/localtime
 echo "America/Guatemala" > /etc/timezone
-rm -rf /tmp/usr
+unset ZONEINFO tz
+cd /sources
+rm -rf tzdata-2025b
 EOF
 
 # ============================================================================
