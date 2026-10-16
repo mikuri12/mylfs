@@ -30,6 +30,7 @@ chroot_run() {
         PS1='(lfs chroot) \u:\w\$ ' \
         PATH=/usr/bin:/usr/sbin \
         MAKEFLAGS="$MAKEFLAGS" TESTSUITEFLAGS="$TESTSUITEFLAGS" \
+        CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
         LC_ALL=POSIX \
         /bin/bash --noprofile --norc -s
 }
