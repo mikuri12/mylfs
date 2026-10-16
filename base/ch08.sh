@@ -1607,9 +1607,12 @@ cd /sources
 rm -rf curl-8.15.0
 tar -xpf curl-8.15.0.tar.xz
 cd curl-8.15.0
+# curl >= 8.15 exige decisión explícita sobre libpsl; el PLAN minimiza y no
+# hay navegador → --without-libpsl (protege cookies cross-domain, irrelevante aquí)
 ./configure --prefix=/usr    \
             --disable-static \
             --with-openssl   \
+            --without-libpsl \
             --with-ca-path=/etc/ssl/certs
 make
 make install
