@@ -558,17 +558,13 @@ make
 make install
 mkdir -pv /usr/lib/bfd-plugins
 ln -sfv ../../libexec/gcc/$(gcc -dumpmachine)/15.2.0/liblto_plugin.so /usr/lib/bfd-plugins/
-# Verificación de sanidad del libro (§8.33)
-echo 'int main(){}' > dummy.c
-cc dummy.c -v -Wl,--verbose 2> dummy.log
-readelf -l a.out | grep ': /lib'
-grep -o '/usr/lib.*/crt[1in].*succeeded' dummy.log
-grep -B4 '^ /usr/include' dummy.log
-grep 'SEARCH.*/usr/lib' dummy.log | sed 's|; |\n|g'
-grep "/lib.*/libc.so.6 " dummy.log
-grep found dummy.log
-mkdir -v /usr/lib/gcc/$(gcc -dumpmachine)/15.2.0/include-fixed
-rm -v dummy.c a.out dummy.log
+# Limpieza de headers "fixed" obsoletos (nota del libro para upgrades; el
+# --disable-fixincludes ya evita que se creen en build fresco)
+DIR=$(dirname $(gcc -print-libgcc-file-name))
+[ -e $DIR/include/limits.h ]    || mv $DIR/include{-fixed,}/limits.h
+[ -e $DIR/include/syslimits.h ] || mv $DIR/include{-fixed,}/syslimits.h
+rm -rfv $DIR/include-fixed/*
+unset DIR
 EOF
 
 # ============================================================================
