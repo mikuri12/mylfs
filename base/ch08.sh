@@ -1870,21 +1870,32 @@ EOF
 # Verificación de salida de la etapa (fuera del chroot)
 # ---------------------------------------------------------------------------
 step "verificación rápida del resultado"
-test -x "$LFS/usr/bin/gcc"      || { echo "FALTA gcc final"; exit 1; }
-test -x "$LFS/usr/bin/bash"     || { echo "FALTA bash"; exit 1; }
-test -e "$LFS/usr/lib/libc.so.6" || { echo "FALTA glibc final"; exit 1; }
-test -x "$LFS/usr/bin/udevadm"   || { echo "FALTA eudev"; exit 1; }
-test -e "$LFS/usr/lib/libpam.so" || { echo "FALTA Linux-PAM"; exit 1; }
-test -x "$LFS/usr/bin/doas"      || { echo "FALTA opendoas"; exit 1; }
-test -x "$LFS/usr/bin/ssh"       || { echo "FALTA openssh"; exit 1; }
-test -e "$LFS/etc/pam.d/login"   || { echo "FALTA pam.d/login"; exit 1; }
-test -x "$LFS/usr/bin/dhcpcd"    || { echo "FALTA dhcpcd"; exit 1; }
-test -x "$LFS/usr/sbin/chronyd"  || { echo "FALTA chrony"; exit 1; }
-test -x "$LFS/usr/sbin/acpid"    || { echo "FALTA acpid"; exit 1; }
-test -e "$LFS/etc/ssl/certs/ca-certificates.crt" || { echo "FALTA ca-certs"; exit 1; }
-test -x "$LFS/usr/bin/dracut"    || { echo "FALTA dracut"; exit 1; }
-test -x "$LFS/usr/bin/ls"        || { echo "FALTA coreutils"; exit 1; }
-test ! -e "$LFS/tools"           || { echo "/tools sigue presente"; exit 1; }
+# El botón de verificación NO aborta en el primer fallo: acumula y decide
+# al final (evita perder 2h de build por un path mal asumido).
+FAILS=""
+ck() { # ck <desc> <test...>
+    local desc=$1; shift
+    if "$@"; then :; else FAILS="$FAILS $desc"; echo "FALLA: $desc"; fi
+}
+ck "gcc final"      test -x "$LFS/usr/bin/gcc"
+ck "bash"           test -x "$LFS/usr/bin/bash"
+ck "glibc final"    test -e "$LFS/usr/lib/libc.so.6"
+ck "eudev/udevadm"  test -x "$LFS/usr/bin/udevadm"
+ck "Linux-PAM"      test -e "$LFS/usr/lib/libpam.so"
+ck "opendoas"       test -x "$LFS/usr/bin/doas"
+ck "openssh"        test -x "$LFS/usr/bin/ssh"
+ck "pam.d/login"    test -e "$LFS/etc/pam.d/login"
+ck "dhcpcd (sbin)"  test -x "$LFS/usr/sbin/dhcpcd"
+ck "chronyd"        test -x "$LFS/usr/sbin/chronyd"
+ck "acpid"          test -x "$LFS/usr/sbin/acpid"
+ck "ca-certs"       test -e "$LFS/etc/ssl/certs/ca-certificates.crt"
+ck "dracut"         test -x "$LFS/usr/bin/dracut"
+ck "coreutils ls"   test -x "$LFS/usr/bin/ls"
+if [ -e "$LFS/tools" ]; then FAILS="$FAILS /tools-sigue-presente"; fi
 df -h "$LFS"
 du -sh "$LFS/usr" "$LFS/lib" || true
+if [ -n "$FAILS" ]; then
+    echo "VERIFICACIÓN CON FALLOS:$FAILS"
+    exit 1
+fi
 echo "==> ETAPA 3 COMPLETA (t=$(( (SECONDS-T0)/60 ))min)"
