@@ -918,31 +918,21 @@ EOF
 
 # ============================================================================
 # §8.56-8.63 módulos Python (flit-core, packaging, wheel, setuptools, ninja,
-# meson, markupsafe, jinja2)
+# meson, markupsafe, jinja2) — cada uno explícito, extrae su tarball
 # ============================================================================
-pip_pkg() {
-    local name=$1
-    pkg "pip-$name" <<EOF
+pipmod() {
+    # pipmod <dir-tarball> <nombre-pip>: extrae, wheela e instala
+    local dir=$1 mod=$2
+    pkg "pip-$mod" <<EOF
 set -euo pipefail
 cd /sources
-rm -rf $name-*
-pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps \$(find . -maxdepth 1 -type d -name "$name-*" | head -1 | cut -d/ -f2 | sed 's/-[0-9].*//' >/dev/null; echo \$(ls -d $name-* | head -1))
-pip3 install --no-index --find-links dist $name
-rm -rf dist $name-*
-EOF
-}
-
-pip_install() {
-    local name=$1
-    pkg "pip-$name" <<EOF
-set -euo pipefail
-cd /sources
-D=\$(ls -d $name-* | head -1)
-cd "\$D"
+rm -rf "$dir"
+tar -xpf "$dir".tar.gz
+cd "$dir"
 pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps \$PWD
-pip3 install --no-index --find-links dist $name
+pip3 install --no-index --find-links dist $mod
 cd /sources
-rm -rf "\$D"
+rm -rf "$dir" dist
 EOF
 }
 
@@ -959,9 +949,9 @@ cd /sources
 rm -rf flit_core-3.12.0
 EOF
 
-pip_install packaging
-pip_install wheel
-pip_install setuptools
+pipmod packaging-25.0 packaging
+pipmod wheel-0.46.1 wheel
+pipmod setuptools-80.9.0 setuptools
 
 pkg ninja <<'EOF'
 set -euo pipefail
@@ -986,8 +976,8 @@ cd /sources
 rm -rf meson-1.8.3
 EOF
 
-pip_install markupsafe
-pip_install jinja2
+pipmod markupsafe-3.0.2 markupsafe
+pipmod jinja2-3.1.6 jinja2
 
 # ============================================================================
 # §8.64 Kmod
