@@ -185,6 +185,10 @@ if [ ! -f runit-void.tar.gz ]; then
 fi
 tar -xzf runit-void.tar.gz -C runit-void --strip-components=1
 cd runit-void
+# gcc moderno (15) trata implicit-function-declaration como error;
+# chkshsgr.c no incluye <grp.h> (setgroups). Fix igual que Void en patches:
+sed -i 's/#include <unistd.h>/#include <unistd.h>\n#include <grp.h>/' src/chkshsgr.c
+grep -q "grp.h" src/chkshsgr.c || { echo "sed chkshsgr no aplicó"; exit 1; }
 # package/compile compila todo a ./command/ (sin su; el target 'all' del
 # Makefile solo re-empaqueta el tarball upstream y USA su — NO llamarlo)
 package/compile
