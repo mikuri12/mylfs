@@ -179,22 +179,29 @@ set -euo pipefail
 cd /sources
 rm -rf runit-void
 mkdir runit-void
-# tarball del fork runit de void-linux
 if [ ! -f runit-void.tar.gz ]; then
     curl -fsSL -o runit-void.tar.gz \
         "https://github.com/void-linux/runit/archive/refs/heads/master.tar.gz"
 fi
 tar -xzf runit-void.tar.gz -C runit-void --strip-components=1
 cd runit-void
-# package_*.conf de Void: build estático recomendado
-CFLAGS="$CFLAGS -static" ./package/compile 2>/dev/null || {
-    # si el package build falla, make directo
-    make
-}
-# binarios: runit, runit-init, utmpset, chpst, sv, runsv, runsvdir, runsvchdir, svlogd
-install -v -m755 command/t/{runit,runit-init,utmpset,chpst,sv,runsv,runsvdir,runsvchdir,svlogd} /usr/sbin/ 2>/dev/null || \
-install -v -m755 command/* /usr/sbin/ 2>/dev/null || true
-ls /usr/sbin/ | grep -E "runit|chpst|sv|runsv|utmpset" || { echo "runit no instalado"; exit 1; }
+# package/compile compila todo a ./command/ (sin su; el target 'all' del
+# Makefile solo re-empaqueta el tarball upstream y USA su — NO llamarlo)
+package/compile
+# verificar los binarios críticos del PLAN
+for b in runit runit-init runsv runsvdir runsvchdir sv svlogd chpst utmpset; do
+    test -x "command/$b" || { echo "runit: falta command/$b"; exit 1; }
+done
+# instalación igual que Void: /usr/bin (runit-init como init) y sbin symlinks
+install -v -m755 command/runit /usr/sbin/runit
+install -v -m755 command/runit-init /usr/sbin/runit-init
+install -v -m755 command/runsv /usr/bin/runsv
+install -v -m755 command/runsvdir /usr/bin/runsvdir
+install -v -m755 command/runsvchdir /usr/bin/runsvchdir
+install -v -m755 command/sv /usr/bin/sv
+install -v -m755 command/svlogd /usr/bin/svlogd
+install -v -m755 command/chpst /usr/bin/chpst
+install -v -m755 command/utmpset /usr/bin/utmpset
 cd /sources
 rm -rf runit-void
 REOF
