@@ -1,0 +1,9 @@
+# base/sources-12.4.stage4.tsv
+# Manifiesto etapa 4: kernel mikuri (release verificado), fuentes CachyOS
+# 7.1.5 (headers), grub-2.12 (libro 12.4), runit (fork void) y void-runit.
+# Columnas: sha256 <TAB> archivo <TAB> URL <TAB> fuente-del-checksum
+f3c97391f7c4eaa677a78e090c7e97e6dc47b16f655f04683ebd37bef7fe0faa	grub-2.12.tar.xz	https://ftpmirror.gnu.org/grub/grub-2.12.tar.xz	md5 libro 12.4 (60c564b1bdc39d8e43b3aab4bc0fb140) verificado
+8f9a217d724a0bfe38239ef7b9fbcd602a8fae1794501d4acb0e698d348713b9	cachyos-7.1.5-1.tar.gz	https://github.com/CachyOS/linux/releases/download/cachyos-7.1.5-1/cachyos-7.1.5-1.tar.gz	sha256 del build.yml de mikuri-kernel (8f9a217d...13b9) COINCIDE
+9da2b7a39a3c3616d323b0690977eeeafab8ebbb242d4bf0868c82f8fc35c22c	runit-void.tar.gz	https://github.com/void-linux/runit/archive/refs/heads/master.tar.gz	tarball master del fork void-linux/runit (rolling; sha verificada hoy)
+4e55b1647225bc747a7eef94847c03b4bbbc1990145239f036f7b740a965fef4	void-runit.tar.gz	https://github.com/void-linux/void-runit/archive/refs/heads/master.tar.gz	tarball master de void-linux/void-runit (rolling; sha verificada hoy)
+cf5fe27099311b9b7277f9df6f3eb6a81cacf08bc554d29678bd99c2de90372c	mikuri-kernel-7.1.5-mikuri.tar.gz	https://github.com/mikuri12/mikuri-kernel/releases/download/v7.1.5-mikuri/mikuri-kernel-7.1.5-mikuri.tar.gz	sha256 del release (verificado 2026-10-15)
