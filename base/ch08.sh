@@ -1825,7 +1825,13 @@ for i in $(find /usr/lib -type f -name \*.so* ! -name \*dbg) \
     case "$online_usrbin $online_usrlib $save_usrlib" in
         *$(basename $i)* )
             ;;
-        * ) strip --strip-debug $i
+        * ) # El libro avisa: muchos archivos no-ELF dan "file format not
+            # recognized" (scripts como *-gdb.py) y se IGNORAN SEGURO.
+            # En CI con set -e hay que tolerarlos: solo strip si es ELF.
+            case "$i" in
+                *.py|*.sh|*.pl|*.txt|*.conf|*.awk|*.pm) continue ;;
+            esac
+            strip --strip-debug "$i" 2>/dev/null || true
             ;;
     esac
 done
