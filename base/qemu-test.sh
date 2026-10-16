@@ -53,7 +53,8 @@ sudo grub-install --target=x86_64-efi \
     --bootloader-id=mylfs \
     --modules="part_gpt ext2" \
     --no-nvram \
-    --removable 2>&1 | tail -3
+    --removable > /tmp/grub-install.log 2>&1
+tail -3 /tmp/grub-install.log
 # copiar la grub.cfg al lugar correcto
 sudo cp /mnt/root-part/boot/grub/grub.cfg /mnt/root-part/boot/grub/grub.cfg 2>/dev/null || true
 
@@ -103,7 +104,8 @@ wait $QEMU_PID 2>/dev/null || true
 
 if [ $ok -eq 1 ]; then
     echo "== QEMU ARRANCÓ HASTA LOGIN =="
-    sudo grep -E "runit|stage|Welcome|login:" "$LOG" | tail -20
+    sudo grep -E "runit|stage|Welcome|login:" "$LOG" > /tmp/qemu-grep.txt || true
+    sudo tail -20 /tmp/qemu-grep.txt
     exit 0
 else
     echo "== QEMU NO LLEGÓ A LOGIN — últimos 40 líneas =="

@@ -106,7 +106,10 @@ if [ ! -f mikuri-kernel-7.1.5-mikuri.tar.gz ]; then
         "https://github.com/mikuri12/mikuri-kernel/releases/download/v7.1.5-mikuri/mikuri-kernel-7.1.5-mikuri.tar.gz"
 fi
 echo "$KSHA  mikuri-kernel-7.1.5-mikuri.tar.gz" | sha256sum -c -
-tar -tzf mikuri-kernel-7.1.5-mikuri.tar.gz | head -3
+# Listar contenido sin matar a tar con SIGPIPE (head cierra el pipe):
+tar -tzf mikuri-kernel-7.1.5-mikuri.tar.gz > /tmp/kernel-list.txt
+head -3 /tmp/kernel-list.txt
+grep -c "^boot/\|^usr/lib/modules/" /tmp/kernel-list.txt
 tar -xzpf mikuri-kernel-7.1.5-mikuri.tar.gz -C "$LFS" --numeric-owner --keep-directory-symlink
 ls -la "$LFS/boot/"
 
