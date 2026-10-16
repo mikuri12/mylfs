@@ -1762,8 +1762,9 @@ cd /sources
 rm -rf dracut-112
 tar -xpf dracut-112.tar.gz
 cd dracut-112
-# dracut-ng: ./configure + make install
-./configure --prefix=/usr --sysconfdir=/etc
+# dracut-ng: ./configure + make install. --disable-documentation evita
+# asciidoctor/asciidoc (ruby, no existe en el chroot; PLAN: sin docs).
+./configure --prefix=/usr --sysconfdir=/etc --disable-documentation
 make -j1
 make install
 rm -rf /usr/share/doc/dracut* /usr/lib/dracut/test
