@@ -50,7 +50,13 @@ jobs:
           bash base/version-check.sh
 
       - name: Descargar y verificar fuentes (manifiesto sha256)
-        run: sudo bash base/download-sources.sh
+        run: |
+          for i in 1 2 3; do
+            if sudo bash base/download-sources.sh; then exit 0; fi
+            echo "descarga falló (intento $i), reintentando en 20s…"
+            sleep 20
+          done
+          exit 1
 
       - name: Etapa 1 — toolchain temporal (LFS caps. 5-6)
         run: sudo bash base/ch05.sh
@@ -110,7 +116,13 @@ jobs:
           df -h /mnt
 
       - name: Descargar fuentes etapa 2 (manifiesto sha256)
-        run: sudo bash base/download-sources.sh base/sources-12.4.stage2.tsv
+        run: |
+          for i in 1 2 3; do
+            if sudo bash base/download-sources.sh base/sources-12.4.stage2.tsv; then exit 0; fi
+            echo "descarga falló (intento $i), reintentando en 20s…"
+            sleep 20
+          done
+          exit 1
 
       - name: Etapa 2 — chroot + herramientas (LFS caps. 7)
         run: sudo bash base/ch07.sh
@@ -169,8 +181,17 @@ jobs:
 
       - name: Descargar fuentes etapa 3 (manifiestos sha256)
         run: |
-          sudo bash base/download-sources.sh base/sources-12.4.stage3.tsv
-          sudo bash base/download-sources.sh base/sources-extra.stage3.tsv
+          for i in 1 2 3; do
+            if sudo bash base/download-sources.sh base/sources-12.4.stage3.tsv; then break; fi
+            echo "descarga stage3 falló (intento $i), reintentando en 20s…"
+            sleep 20
+          done
+          for i in 1 2 3; do
+            if sudo bash base/download-sources.sh base/sources-extra.stage3.tsv; then exit 0; fi
+            echo "descarga extras falló (intento $i), reintentando en 20s…"
+            sleep 20
+          done
+          exit 1
 
       - name: Etapa 3 — sistema base final (LFS cap. 8 + extras del PLAN)
         run: sudo bash base/ch08.sh
@@ -229,7 +250,13 @@ jobs:
           df -h /mnt
 
       - name: Descargar fuentes etapa 4 (manifiesto sha256)
-        run: sudo bash base/download-sources.sh base/sources-12.4.stage4.tsv
+        run: |
+          for i in 1 2 3; do
+            if sudo bash base/download-sources.sh base/sources-12.4.stage4.tsv; then exit 0; fi
+            echo "descarga falló (intento $i), reintentando en 20s…"
+            sleep 20
+          done
+          exit 1
 
       - name: Etapa 4 — kernel, GRUB, dracut, runit (LFS caps. 9-11)
         run: sudo bash base/ch09-11.sh
