@@ -10,7 +10,7 @@ step() { printf '\n==> [qemu] %s (t+%dm)\n' "$*" $(( (SECONDS-T0)/60 )); }
 
 step "dependencias QEMU/OVMF en el runner"
 sudo apt-get update -q
-sudo apt-get install -y -q qemu-system-x86 ovmf sgdisk mtools >/dev/null
+sudo apt-get install -y -q qemu-system-x86 ovmf gdisk mtools >/dev/null
 
 step "crear disco de prueba (12G, GPT: 512M EFI + root ext4)"
 DISK=/mnt/work/mylfs-test.img
