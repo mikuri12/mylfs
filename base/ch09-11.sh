@@ -189,6 +189,11 @@ cd runit-void
 # chkshsgr.c no incluye <grp.h> (setgroups). Fix igual que Void en patches:
 sed -i 's/#include <unistd.h>/#include <unistd.h>\n#include <grp.h>/' src/chkshsgr.c
 grep -q "grp.h" src/chkshsgr.c || { echo "sed chkshsgr no aplicó"; exit 1; }
+# Código K&R de daemontools: prototipos vacíos () y definiciones old-style
+# son ILEGALES en C23 (default gcc 15). Compilar como gnu89 (como hace Void
+# con -D_GNU_SOURCE; aquí fijamos el estándar vía conf-cc):
+sed -i 's/^gcc -O2 -Wall/gcc -std=gnu89 -O2 -Wall/' src/conf-cc
+grep -q "std=gnu89" src/conf-cc || { echo "sed conf-cc no aplicó"; exit 1; }
 # package/compile compila todo a ./command/ (sin su; el target 'all' del
 # Makefile solo re-empaqueta el tarball upstream y USA su — NO llamarlo)
 package/compile
