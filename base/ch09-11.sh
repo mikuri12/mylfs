@@ -228,8 +228,9 @@ tar -xzf void-runit.tar.gz -C void-runit --strip-components=1
 cd void-runit
 # compilar helpers (halt, pause, vlogger, seedrng)
 make CC="gcc $CFLAGS"
-# instalar todo: scripts 1/2/3, core-services, runsvdir, services
-make install DESTDIR=/ VOIDTOOLS=""
+# instalar todo con PREFIX=/usr (default /usr/local dejaría halt/poweroff
+# fuera del PATH del initramfs de dracut)
+make install DESTDIR=/ PREFIX=/usr
 cd /sources
 rm -rf void-runit
 VEOF

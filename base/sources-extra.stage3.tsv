@@ -12,3 +12,4 @@ eb69809fc0d1187f2463ab2149c53aa9f42a78e59f14ebea68eae6cb6b4fc1c3	eudev-3.2.15.ta
 19fe1d9f4664d445a69a96c71e8fdb60bcd8df24c73d1386e02287f7366ad422	chrony-4.5.tar.gz	https://download.tuxfamily.org/chrony/chrony-4.5.tar.gz	sha256 verificada de la descarga oficial tuxfamily (2026-10-15); .asc disponible en el mismo dir
 839d21eb4bd27bb0ee40d74c9da46df088c2e1425fcd8c3ea62b7e3a3dd28a91	dracut-112.tar.gz	https://github.com/dracut-ng/dracut/archive/refs/tags/112.tar.gz	sha256 del tarball release dracut-ng 112 (2026-08-02)
 a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505	cacert-2026-09-25.pem	https://curl.se/ca/cacert-2026-09-25.pem	extracto oficial Mozilla mantenido por curl.se
+937610b97c329a1ec9268553fb780037bcfff0dcffe9725ebc4fd9c1aa9075db	cpio-2.15.tar.bz2	https://ftp.gnu.org/gnu/cpio/cpio-2.15.tar.bz2	md5 BLFS 12.4: 3394d444ca1905ea56c94b628b706a0b (verificado)

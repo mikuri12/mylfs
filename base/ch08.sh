@@ -1756,6 +1756,25 @@ chmod 755 /etc/acpi/powerbtn.sh
 rm -rf /usr/share/doc/acpid-2.0.34
 EOF
 
+# cpio 2.15 (BLFS): requerido por dracut para crear el initramfs
+pkg cpio <<'EOF'
+set -euo pipefail
+cd /sources
+rm -rf cpio-2.15
+tar -xpf cpio-2.15.tar.bz2
+cd cpio-2.15
+sed -e "/^extern int (\*xstat)/s/()/(const char * restrict,  struct stat * restrict)/" \
+    -i src/extern.h
+sed -e "/^int (\*xstat)/s/()/(const char * restrict,  struct stat * restrict)/" \
+    -i src/global.c
+./configure --prefix=/usr \
+            --enable-mt   \
+            --with-rmt=/usr/libexec/rmt
+make
+make install
+rm -rf /usr/share/doc/cpio-2.15
+EOF
+
 pkg dracut <<'EOF'
 set -euo pipefail
 cd /sources
