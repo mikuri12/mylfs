@@ -314,6 +314,7 @@ UEOF
 # root=UUID=... ro mitigations=off (README del repo mikuri-kernel)
 # ============================================================================
 step "grub.cfg (plantilla)"
+mkdir -pv "$LFS/boot/grub"
 cat > "$LFS/boot/grub/grub.cfg" << 'EOF'
 # GRUB config generada por mylfs (etapa 4)
 set default=0
@@ -327,7 +328,6 @@ menuentry "mylfs 1.0 (7.1.5-mikuri)" {
     initrd /boot/initramfs-7.1.5-mikuri.img
 }
 EOF
-mkdir -pv "$LFS/boot/grub"
 
 # ============================================================================
 # dracut: initramfs --no-hostonly con add-drivers ahci ext4 (PLAN)
