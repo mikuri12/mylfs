@@ -33,7 +33,8 @@ sudo mkdir -p /mnt/efi-part /mnt/root-part
 sudo mount ${LOOP}p2 /mnt/root-part
 sudo mkdir -p /mnt/root-part/boot/efi
 sudo mount ${LOOP}p1 /mnt/root-part/boot/efi
-sudo tar --zstd -xpf "$1" -C /mnt/root-part --numeric-owner --keep-directory-symlink
+# el tarball lleva prefijo lfs/ (creado con -C /mnt lfs): strip 1 nivel
+sudo tar --zstd -xpf "$1" -C /mnt/root-part --numeric-owner --keep-directory-symlink --strip-components=1
 
 # UUID real para fstab/grub
 ROOT_UUID=$(sudo blkid -s UUID -o value ${LOOP}p2)
