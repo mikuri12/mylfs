@@ -68,10 +68,11 @@ sudo umount /mnt/root-part
 sudo losetup -d "$LOOP"
 
 step "arrancar QEMU con OVMF, esperar login (timeout 300s)"
-# Ubuntu 24.04: /usr/share/ovmf/OVMF.fd (paquete ovmf). Nombres alternativos
-# según versión: OVMF_CODE_4M.fd (no siempre presente), .qcow2 (24.04+).
+# Ubuntu 24.04 (paquete ovmf noble): para -bios se usa el archivo COMBINADO
+# /usr/share/ovmf/OVMF.fd (code+vars juntos). Los OVMF_CODE_4M.fd son solo
+# "code" y con -bios QEMU no los carga; van con pflash+VARS.
 OVMF=""
-for cand in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/ovmf/OVMF.fd /usr/share/OVMF/OVMF_CODE_4M.qcow2 /usr/share/ovmf/OVMF_CODE.cc.fd; do
+for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd /usr/share/OVMF/OVMF_CODE_4M.fd; do
     [ -f "$cand" ] && OVMF="$cand" && break
 done
 [ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; ls -la /usr/share/ovmf/ /usr/share/OVMF/ 2>/dev/null; exit 1; }
