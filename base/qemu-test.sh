@@ -52,24 +52,26 @@ sudo sed -i "s/ROOTUUID/$ROOT_UUID/g" /mnt/root-part/boot/grub/grub.cfg
 sudo ln -sf /etc/sv/agetty-ttyS0 /mnt/root-part/etc/runit/runsvdir/default/
 sudo sed -i 's/ ro mitigations=off/ ro mitigations=off console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
 
-step "GRUB UEFI en el disco (grub-install del runner)"
-# SIN --removable: el grub-install de Ubuntu embebe búsqueda de /.disk/info
-# estilo live-ISO que no existe en un disco LFS. Sin el flag, embebe la
-# búsqueda por UUID de nuestro ext4 (funciona en cualquier ruta EFI).
-sudo grub-install --target=x86_64-efi \
-    --efi-directory=/mnt/root-part/boot/efi \
-    --boot-directory=/mnt/root-part/boot \
-    --bootloader-id=mylfs \
-    --modules="part_gpt ext2" \
-    --no-nvram > /tmp/grub-install.log 2>&1
-tail -3 /tmp/grub-install.log
-# Copiar a la ruta estándar de arranque removible: OVMF sin NVRAM solo
-# arranca EFI/BOOT/BOOTX64.EFI. El binario es agnóstico de su ubicación
-# (busca el config por UUID), así que copiarlo es seguro.
-sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT
-sudo cp /mnt/root-part/boot/efi/EFI/mylfs/grubx64.efi \
-        /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
-ls -la /mnt/root-part/boot/efi/EFI/BOOT/
+step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
+# El grub-install de Ubuntu embebe un prefijo que no resuelve nuestra
+# partición (caía a grub>). Vía determinista: grub-mkstandalone con config
+# embebida que busca el ext4 por UUID (lo conocemos) y carga su grub.cfg.
+ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
+cat > /tmp/embed.cfg <<EMBED
+search.fs_uuid ${ROOT_UUID_EMBED} root
+set prefix=(\$root)/boot/grub
+insmod ext2
+configfile \${prefix}/grub.cfg
+EMBED
+sudo grub-mkstandalone --format=x86_64-efi \
+    --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
+    --modules="part_gpt ext2 search_fs_uuid fat" \
+    "boot/grub/grub.cfg=/tmp/embed.cfg"
+# EFI/mylfs también (por si el firmware prefiere el bootloader-id)
+sudo mkdir -p /mnt/root-part/boot/efi/EFI/mylfs
+sudo cp /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
+        /mnt/root-part/boot/efi/EFI/mylfs/grubx64.efi
+ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
 
 step "desmontar y liberar loop (antes de arrancar)"
 sudo umount /mnt/root-part/boot/efi
@@ -77,15 +79,32 @@ sudo umount /mnt/root-part
 sudo losetup -d "$LOOP"
 
 step "arrancar QEMU con OVMF, esperar login (timeout 300s)"
-# Ubuntu 24.04 (paquete ovmf noble): para -bios se usa el archivo COMBINADO
-# /usr/share/ovmf/OVMF.fd (code+vars juntos). Los OVMF_CODE_4M.fd son solo
-# "code" y con -bios QEMU no los carga; van con pflash+VARS.
-OVMF=""
-for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd /usr/share/OVMF/OVMF_CODE_4M.fd; do
-    [ -f "$cand" ] && OVMF="$cand" && break
+# OVMF con pflash: CODE + VARS separados (modo canónico). Con --no-nvram
+# en grub-install, OVMF usa su ruta de fallback EFI/BOOT/BOOTX64.EFI.
+OVMF_CODE=""
+OVMF_VARS=""
+for c in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/ovmf/OVMF_CODE.cc.fd; do
+    [ -f "$c" ] && OVMF_CODE="$c" && break
 done
-[ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; ls -la /usr/share/ovmf/ /usr/share/OVMF/ 2>/dev/null; exit 1; }
-echo "OVMF: $OVMF"
+for v in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/ovmf/OVMF_VARS.cc.fd; do
+    [ -f "$v" ] && OVMF_VARS="$v" && break
+done
+if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
+    # copia editable de VARS (pflash la modifica)
+    sudo cp "$OVMF_VARS" /tmp/OVMF_VARS.fd
+    OVMF_ARGS="-drive if=pflash,format=raw,readonly=on,file=$OVMF_CODE \
+               -drive if=pflash,format=raw,file=/tmp/OVMF_VARS.fd"
+    echo "OVMF pflash: code=$OVMF_CODE vars=$OVMF_VARS"
+else
+    # fallback: imagen combinada con -bios
+    OVMF=""
+    for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd; do
+        [ -f "$cand" ] && OVMF="$cand" && break
+    done
+    [ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; exit 1; }
+    OVMF_ARGS="-bios $OVMF"
+    echo "OVMF combinado: $OVMF"
+fi
 
 LOG=/mnt/work/qemu-boot.log
 rm -f "$LOG"
@@ -93,9 +112,9 @@ sudo qemu-system-x86_64 \
     -machine q35 -m 2048 -smp 2 \
     -drive file=$DISK,format=raw,if=virtio \
     -net none \
+    $OVMF_ARGS \
     -serial file:$LOG \
     -display none \
-    -bios "$OVMF" \
     -no-reboot &
 QEMU_PID=$!
 
