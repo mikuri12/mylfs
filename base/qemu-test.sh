@@ -69,17 +69,14 @@ sudo grub-mkstandalone --format=x86_64-efi \
     --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
     --modules="part_gpt part_msdos ext2 fat linux normal search search_fs_uuid echo test boot serial terminal" \
     "boot/grub/grub.cfg=/tmp/embed.cfg"
-# Binario alternativo: grub-mkimage puro + cfg en el memdisk (menos capas).
-# Si el principal mata la VM, el fallback del step de arranque lo usa.
-mkdir -p /tmp/memdisk/boot/grub
-cp /tmp/embed.cfg /tmp/memdisk/boot/grub/grub.cfg
-# empaquetar el memdisk ANTES (grub-mkimage lo embebe como módulo 'memdisk')
-tar -cf /tmp/memdisk.tar -C /tmp/memdisk boot
+# Binario alternativo: grub-mkimage puro con config temprana embebida
+# (--config). El memdisk NO va como argumento posicional (lo trataría como
+# módulo .mod). La early-config ejecuta el menú directamente al arrancar.
 sudo grub-mkimage --format=x86_64-efi \
     --output=/tmp/BOOTX64-alt.efi \
-    --prefix='(memdisk)/boot/grub' \
-    memdisk part_gpt ext2 fat linux normal search_fs_uuid echo configfile boot serial terminal \
-    /tmp/memdisk.tar
+    --prefix='(hd0,gpt2)/boot/grub' \
+    --config=/tmp/embed.cfg \
+    part_gpt ext2 fat linux normal search search_fs_uuid echo test boot serial terminal
 sudo cp /tmp/BOOTX64-alt.efi /mnt/root-part/boot/efi/EFI/mylfs-alt.efi
 ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI /mnt/root-part/boot/efi/EFI/mylfs-alt.efi
 
