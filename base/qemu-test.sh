@@ -56,6 +56,12 @@ step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
 sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT
 cat > /tmp/embed.cfg <<EMBED
+# GRUB debe hablar por serial: la VM corre headless (-display none) y sin
+# esto TODOS los errores de GRUB van a la VGA invisible.
+insmod serial
+serial --unit=0 --speed=115200
+terminal_input --append serial
+terminal_output --append serial
 set timeout=0
 set default=0
 search.fs_uuid ${ROOT_UUID_EMBED} root
