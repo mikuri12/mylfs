@@ -67,7 +67,7 @@ EMBED
 # Binario principal: grub-mkstandalone (config embebida completa)
 sudo grub-mkstandalone --format=x86_64-efi \
     --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
-    --modules="part_gpt part_msdos ext2 extfat fat iso9660 linux normal search search_fs_uuid echo test boot serial terminal" \
+    --modules="part_gpt part_msdos ext2 fat linux normal search search_fs_uuid echo test boot serial terminal" \
     "boot/grub/grub.cfg=/tmp/embed.cfg"
 # Binario alternativo: grub-mkimage puro + cfg en el memdisk (menos capas).
 # Si el principal mata la VM, el fallback del step de arranque lo usa.
