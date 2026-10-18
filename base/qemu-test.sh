@@ -113,9 +113,14 @@ rm -f "$LOG"
 # -boot order=c no aplica a UEFI; OVMF autodetecta EFI/BOOT/BOOTX64.EFI en
 # el primer disco. Se fuerza el disco como único boot entry vía -drive
 # index=0 y se mantiene -no-reboot para capturar muertes tempranas.
+# -drive: bus SATA/AHCI, NO virtio. El OVMF de noble no lista virtio-blk
+# como disco bootable ("UEFI Misc Device" = intento de netboot) y muere.
+# Con AHCI lo enumera como disco normal y encuentra EFI/BOOT/BOOTX64.EFI.
 sudo qemu-system-x86_64 \
     -machine q35 -m 2048 -smp 2 \
-    -drive file=$DISK,format=raw,if=virtio,index=0,media=disk \
+    -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
+    -device ahci,id=ahci0 \
+    -device ide-hd,drive=disk0,bus=ahci0.0 \
     -net none \
     $OVMF_ARGS \
     -serial file:$LOG \
