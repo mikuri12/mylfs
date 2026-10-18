@@ -55,19 +55,25 @@ sudo sed -i 's/ ro mitigations=off/ ro mitigations=off console=ttyS0,115200 cons
 step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
 # El grub-install de Ubuntu embebe un prefijo que no resuelve nuestra
 # partición (caía a grub>). Vía determinista: grub-mkstandalone con config
-# embebida que busca el ext4 por UUID (lo conocemos) y carga su grub.cfg.
+# embebida que hace TODO el boot (search por UUID + linux + initrd), con
+# los módulos precargados vía --modules (viven en el memdisk, no en el
+# rootfs). La grub.cfg del disco queda para el sistema instalado.
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
-sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT /mnt/root-part/boot/efi/EFI/mylfs
+sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT
 cat > /tmp/embed.cfg <<EMBED
+set timeout=0
+set default=0
 search.fs_uuid ${ROOT_UUID_EMBED} root
-set prefix=(\$root)/boot/grub
-insmod ext2
-configfile \${prefix}/grub.cfg
+menuentry "mylfs 1.0 (7.1.5-mikuri)" {
+    linux /boot/vmlinuz-7.1.5-mikuri root=UUID=${ROOT_UUID_EMBED} ro mitigations=off console=ttyS0,115200 console=tty0
+    initrd /boot/initramfs-7.1.5-mikuri.img
+}
 EMBED
 sudo grub-mkstandalone --format=x86_64-efi \
     --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
-    --modules="part_gpt ext2 search_fs_uuid fat" \
+    --modules="part_gpt ext2 search_fs_uuid linux normal fat echo test boot" \
     "boot/grub/grub.cfg=/tmp/embed.cfg"
+ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
 
 step "desmontar y liberar loop (antes de arrancar)"
 sudo umount /mnt/root-part/boot/efi
