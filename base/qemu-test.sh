@@ -110,9 +110,12 @@ fi
 
 LOG=/mnt/work/qemu-boot.log
 rm -f "$LOG"
+# -boot order=c no aplica a UEFI; OVMF autodetecta EFI/BOOT/BOOTX64.EFI en
+# el primer disco. Se fuerza el disco como único boot entry vía -drive
+# index=0 y se mantiene -no-reboot para capturar muertes tempranas.
 sudo qemu-system-x86_64 \
     -machine q35 -m 2048 -smp 2 \
-    -drive file=$DISK,format=raw,if=virtio \
+    -drive file=$DISK,format=raw,if=virtio,index=0,media=disk \
     -net none \
     $OVMF_ARGS \
     -serial file:$LOG \
@@ -120,15 +123,25 @@ sudo qemu-system-x86_64 \
     -no-reboot &
 QEMU_PID=$!
 
-# Esperar el prompt de login en el log serial
+# Esperar el prompt de login en el log serial (o señales de fallo conocidas)
 ok=0
+failreason=""
 for i in $(seq 1 150); do
     if sudo grep -q "login:" "$LOG" 2>/dev/null; then
         ok=1
         break
     fi
     if ! kill -0 $QEMU_PID 2>/dev/null; then
-        echo "QEMU terminó antes del login"
+        failreason="QEMU murió"
+        break
+    fi
+    # capturar caídas a consola GRUB/UEFI shell si ocurren
+    if sudo grep -q "^grub> " "$LOG" 2>/dev/null; then
+        failreason="GRUB cayó a su consola (grub>)"
+        break
+    fi
+    if sudo grep -q "Shell>" "$LOG" 2>/dev/null; then
+        failreason="OVMF cayó a UEFI shell"
         break
     fi
     sleep 2
@@ -136,13 +149,15 @@ done
 sudo kill $QEMU_PID 2>/dev/null || true
 wait $QEMU_PID 2>/dev/null || true
 
+echo "== serial completo (head 30) =="
+sudo head -30 "$LOG" 2>/dev/null || echo "(serial vacío)"
 if [ $ok -eq 1 ]; then
     echo "== QEMU ARRANCÓ HASTA LOGIN =="
     sudo grep -E "runit|stage|Welcome|login:|Linux" "$LOG" > /tmp/qemu-grep.txt || true
     sudo tail -20 /tmp/qemu-grep.txt
     exit 0
 else
-    echo "== QEMU NO LLEGÓ A LOGIN — últimos 40 líneas del serial =="
+    echo "== QEMU NO LLEGÓ A LOGIN ($failreason) — últimos 40 líneas del serial =="
     sudo tail -40 "$LOG" 2>/dev/null || echo "(log serial vacío — no arrancó ni el firmware)"
     exit 1
 fi
