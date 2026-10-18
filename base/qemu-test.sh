@@ -53,11 +53,6 @@ sudo ln -sf /etc/sv/agetty-ttyS0 /mnt/root-part/etc/runit/runsvdir/default/
 sudo sed -i 's/ ro mitigations=off/ ro mitigations=off console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
 
 step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
-# El grub-install de Ubuntu embebe un prefijo que no resuelve nuestra
-# partición (caía a grub>). Vía determinista: grub-mkstandalone con config
-# embebida que hace TODO el boot (search por UUID + linux + initrd), con
-# los módulos precargados vía --modules (viven en el memdisk, no en el
-# rootfs). La grub.cfg del disco queda para el sistema instalado.
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
 sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT
 cat > /tmp/embed.cfg <<EMBED
@@ -69,20 +64,63 @@ menuentry "mylfs 1.0 (7.1.5-mikuri)" {
     initrd /boot/initramfs-7.1.5-mikuri.img
 }
 EMBED
+# Binario principal: grub-mkstandalone (config embebida completa)
 sudo grub-mkstandalone --format=x86_64-efi \
     --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
-    --modules="part_gpt ext2 search_fs_uuid linux normal fat echo test boot" \
+    --modules="part_gpt part_msdos ext2 extfat fat iso9660 linux normal search search_fs_uuid echo test boot serial terminal" \
     "boot/grub/grub.cfg=/tmp/embed.cfg"
-ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
+# Binario alternativo: grub-mkimage puro + cfg en el memdisk (menos capas).
+# Si el principal mata la VM, el fallback del step de arranque lo usa.
+mkdir -p /tmp/memdisk/boot/grub
+cp /tmp/embed.cfg /tmp/memdisk/boot/grub/grub.cfg
+# empaquetar el memdisk ANTES (grub-mkimage lo embebe como módulo 'memdisk')
+tar -cf /tmp/memdisk.tar -C /tmp/memdisk boot
+sudo grub-mkimage --format=x86_64-efi \
+    --output=/tmp/BOOTX64-alt.efi \
+    --prefix='(memdisk)/boot/grub' \
+    memdisk part_gpt ext2 fat linux normal search_fs_uuid echo configfile boot serial terminal \
+    /tmp/memdisk.tar
+sudo cp /tmp/BOOTX64-alt.efi /mnt/root-part/boot/efi/EFI/mylfs-alt.efi
+ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI /mnt/root-part/boot/efi/EFI/mylfs-alt.efi
 
 step "desmontar y liberar loop (antes de arrancar)"
 sudo umount /mnt/root-part/boot/efi
 sudo umount /mnt/root-part
 sudo losetup -d "$LOOP"
 
+run_qemu_boot() {
+    # $1 = ruta al EFI a bootear (se copia a EFI/BOOT/BOOTX64.EFI antes)
+    QEMU_OK=0
+    QEMU_FAIL=""
+    sudo mount ${LOOP}p1 /mnt/root-part/boot/efi 2>/dev/null || true
+    sudo cp "$1" /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
+    sudo umount /mnt/root-part/boot/efi 2>/dev/null || true
+    rm -f "$LOG"
+    sudo qemu-system-x86_64 \
+        -machine q35 -m 2048 -smp 2 \
+        -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
+        -device ahci,id=ahci0 \
+        -device ide-hd,drive=disk0,bus=ahci0.0 \
+        -net none \
+        $OVMF_ARGS \
+        -serial file:$LOG \
+        -display none \
+        -no-reboot &
+    local pid=$!
+    for i in $(seq 1 150); do
+        if sudo grep -q "login:" "$LOG" 2>/dev/null; then QEMU_OK=1; break; fi
+        if ! kill -0 $pid 2>/dev/null; then QEMU_FAIL="QEMU murió"; break; fi
+        if sudo grep -q "^grub> " "$LOG" 2>/dev/null; then QEMU_FAIL="GRUB cayó a grub>"; break; fi
+        if sudo grep -q "Shell>" "$LOG" 2>/dev/null; then QEMU_FAIL="UEFI shell"; break; fi
+        sleep 2
+    done
+    sudo kill $pid 2>/dev/null || true
+    wait $pid 2>/dev/null || true
+    echo "boot intento terminado: ok=$QEMU_OK fail=$QEMU_FAIL"
+}
+
 step "arrancar QEMU con OVMF, esperar login (timeout 300s)"
-# OVMF con pflash: CODE + VARS separados (modo canónico). Con --no-nvram
-# en grub-install, OVMF usa su ruta de fallback EFI/BOOT/BOOTX64.EFI.
+# OVMF con pflash: CODE + VARS separados (modo canónico).
 OVMF_CODE=""
 OVMF_VARS=""
 for c in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/ovmf/OVMF_CODE.cc.fd; do
@@ -92,13 +130,11 @@ for v in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/ovmf/OVMF_VARS.cc.fd; do
     [ -f "$v" ] && OVMF_VARS="$v" && break
 done
 if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
-    # copia editable de VARS (pflash la modifica)
     sudo cp "$OVMF_VARS" /tmp/OVMF_VARS.fd
     OVMF_ARGS="-drive if=pflash,format=raw,readonly=on,file=$OVMF_CODE \
                -drive if=pflash,format=raw,file=/tmp/OVMF_VARS.fd"
     echo "OVMF pflash: code=$OVMF_CODE vars=$OVMF_VARS"
 else
-    # fallback: imagen combinada con -bios
     OVMF=""
     for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd; do
         [ -f "$cand" ] && OVMF="$cand" && break
@@ -109,54 +145,27 @@ else
 fi
 
 LOG=/mnt/work/qemu-boot.log
-rm -f "$LOG"
-# -boot order=c no aplica a UEFI; OVMF autodetecta EFI/BOOT/BOOTX64.EFI en
-# el primer disco. Se fuerza el disco como único boot entry vía -drive
-# index=0 y se mantiene -no-reboot para capturar muertes tempranas.
-# -drive: bus SATA/AHCI, NO virtio. El OVMF de noble no lista virtio-blk
-# como disco bootable ("UEFI Misc Device" = intento de netboot) y muere.
-# Con AHCI lo enumera como disco normal y encuentra EFI/BOOT/BOOTX64.EFI.
-sudo qemu-system-x86_64 \
-    -machine q35 -m 2048 -smp 2 \
-    -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
-    -device ahci,id=ahci0 \
-    -device ide-hd,drive=disk0,bus=ahci0.0 \
-    -net none \
-    $OVMF_ARGS \
-    -serial file:$LOG \
-    -display none \
-    -no-reboot &
-QEMU_PID=$!
 
-# Esperar el prompt de login en el log serial (o señales de fallo conocidas)
-ok=0
-failreason=""
-for i in $(seq 1 150); do
-    if sudo grep -q "login:" "$LOG" 2>/dev/null; then
-        ok=1
-        break
-    fi
-    if ! kill -0 $QEMU_PID 2>/dev/null; then
-        failreason="QEMU murió"
-        break
-    fi
-    # capturar caídas a consola GRUB/UEFI shell si ocurren
-    if sudo grep -q "^grub> " "$LOG" 2>/dev/null; then
-        failreason="GRUB cayó a su consola (grub>)"
-        break
-    fi
-    if sudo grep -q "Shell>" "$LOG" 2>/dev/null; then
-        failreason="OVMF cayó a UEFI shell"
-        break
-    fi
-    sleep 2
-done
-sudo kill $QEMU_PID 2>/dev/null || true
-wait $QEMU_PID 2>/dev/null || true
+# Volver a attachear el loop (lo liberamos antes de arrancar)
+sudo losetup -fP "$DISK"
+LOOP=$(losetup -j "$DISK" | head -1 | cut -d: -f1)
+
+# Intento 1: binario grub-mkstandalone. Si mata la VM (o cae a grub>/shell),
+# Intento 2: binario grub-mkimage puro con memdisk.
+RESULT_FILE=/tmp/qemu-result.txt
+run_qemu_boot /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI > /dev/null 2>&1 || true
+ok=$QEMU_OK
+failreason=$QEMU_FAIL
+if [ $ok -ne 1 ]; then
+    echo "== intento 1 (mkstandalone) falló: $failreason — probando mkimage =="
+    run_qemu_boot /mnt/root-part/boot/efi/EFI/mylfs-alt.efi > /dev/null 2>&1 || true
+    ok=$QEMU_OK
+    failreason=$QEMU_FAIL
+fi
 
 echo "== serial completo (head 30) =="
 sudo head -30 "$LOG" 2>/dev/null || echo "(serial vacío)"
-if [ $ok -eq 1 ]; then
+if [ "$ok" = "1" ]; then
     echo "== QEMU ARRANCÓ HASTA LOGIN =="
     sudo grep -E "runit|stage|Welcome|login:|Linux" "$LOG" > /tmp/qemu-grep.txt || true
     sudo tail -20 /tmp/qemu-grep.txt
