@@ -57,6 +57,7 @@ step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
 # partición (caía a grub>). Vía determinista: grub-mkstandalone con config
 # embebida que busca el ext4 por UUID (lo conocemos) y carga su grub.cfg.
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
+sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT /mnt/root-part/boot/efi/EFI/mylfs
 cat > /tmp/embed.cfg <<EMBED
 search.fs_uuid ${ROOT_UUID_EMBED} root
 set prefix=(\$root)/boot/grub
@@ -67,11 +68,6 @@ sudo grub-mkstandalone --format=x86_64-efi \
     --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
     --modules="part_gpt ext2 search_fs_uuid fat" \
     "boot/grub/grub.cfg=/tmp/embed.cfg"
-# EFI/mylfs también (por si el firmware prefiere el bootloader-id)
-sudo mkdir -p /mnt/root-part/boot/efi/EFI/mylfs
-sudo cp /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
-        /mnt/root-part/boot/efi/EFI/mylfs/grubx64.efi
-ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
 
 step "desmontar y liberar loop (antes de arrancar)"
 sudo umount /mnt/root-part/boot/efi
