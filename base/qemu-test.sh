@@ -53,14 +53,23 @@ sudo ln -sf /etc/sv/agetty-ttyS0 /mnt/root-part/etc/runit/runsvdir/default/
 sudo sed -i 's/ ro mitigations=off/ ro mitigations=off console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
 
 step "GRUB UEFI en el disco (grub-install del runner)"
+# SIN --removable: el grub-install de Ubuntu embebe búsqueda de /.disk/info
+# estilo live-ISO que no existe en un disco LFS. Sin el flag, embebe la
+# búsqueda por UUID de nuestro ext4 (funciona en cualquier ruta EFI).
 sudo grub-install --target=x86_64-efi \
     --efi-directory=/mnt/root-part/boot/efi \
     --boot-directory=/mnt/root-part/boot \
     --bootloader-id=mylfs \
     --modules="part_gpt ext2" \
-    --no-nvram \
-    --removable > /tmp/grub-install.log 2>&1
+    --no-nvram > /tmp/grub-install.log 2>&1
 tail -3 /tmp/grub-install.log
+# Copiar a la ruta estándar de arranque removible: OVMF sin NVRAM solo
+# arranca EFI/BOOT/BOOTX64.EFI. El binario es agnóstico de su ubicación
+# (busca el config por UUID), así que copiarlo es seguro.
+sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT
+sudo cp /mnt/root-part/boot/efi/EFI/mylfs/grubx64.efi \
+        /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
+ls -la /mnt/root-part/boot/efi/EFI/BOOT/
 
 step "desmontar y liberar loop (antes de arrancar)"
 sudo umount /mnt/root-part/boot/efi
