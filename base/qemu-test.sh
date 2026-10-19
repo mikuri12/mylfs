@@ -50,7 +50,7 @@ sudo sed -i "s/UUID=0000-0000/UUID=$EFI_UUID/" /mnt/root-part/etc/fstab
 sudo sed -i "s/ROOTUUID/$ROOT_UUID/g" /mnt/root-part/boot/grub/grub.cfg
 # consola serial para el test (getty serial + cmdline)
 sudo ln -sf /etc/sv/agetty-ttyS0 /mnt/root-part/etc/runit/runsvdir/default/
-sudo sed -i 's/ ro mitigations=off/ ro mitigations=off earlycon=ttyS0,115200 console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
+sudo sed -i 's/ ro mitigations=off/ ro mitigations=off earlycon=ttyS0 ignore_loglevel initcall_debug console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
 
 step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
@@ -66,7 +66,7 @@ search.fs_uuid ${ROOT_UUID_EMBED} root
 echo GRUB-FOUND-ROOT
 menuentry "mylfs 1.0 (7.1.5-mikuri)" {
     echo GRUB-LOADING-KERNEL
-    linux /boot/vmlinuz-7.1.5-mikuri root=UUID=${ROOT_UUID_EMBED} ro mitigations=off earlycon=ttyS0,115200 console=ttyS0,115200 console=tty0
+    linux /boot/vmlinuz-7.1.5-mikuri root=UUID=${ROOT_UUID_EMBED} ro mitigations=off earlycon=ttyS0 ignore_loglevel initcall_debug console=ttyS0,115200 console=tty0
     initrd /boot/initramfs-7.1.5-mikuri.img
 }
 EMBED
@@ -106,7 +106,7 @@ run_qemu_boot() {
         KVM_ARGS="-enable-kvm -cpu host"
         echo "usando KVM con -cpu host"
     else
-        KVM_ARGS="-cpu Skylake-Client"
+        KVM_ARGS="-cpu max"
         echo "sin KVM: TCG con -cpu Skylake-Client"
     fi
     sudo qemu-system-x86_64 \
