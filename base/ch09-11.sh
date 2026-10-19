@@ -211,6 +211,11 @@ install -v -m755 command/sv /usr/bin/sv
 install -v -m755 command/svlogd /usr/bin/svlogd
 install -v -m755 command/chpst /usr/bin/chpst
 install -v -m755 command/utmpset /usr/bin/utmpset
+# /sbin/init → runit-init: dracut/kernel buscan /sbin/init (Void hace igual)
+mkdir -p /sbin
+ln -sfv /usr/sbin/runit-init /sbin/init
+ln -sfv /usr/sbin/runit-init /sbin/runit-init
+ln -sfv /usr/sbin/runit /sbin/runit
 cd /sources
 rm -rf runit-void
 REOF
