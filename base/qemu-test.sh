@@ -110,7 +110,7 @@ run_qemu_boot() {
         echo "sin KVM: TCG con -cpu Skylake-Client"
     fi
     sudo qemu-system-x86_64 \
-    -machine q35 -m 2048 -smp 2 \
+    -machine q35 -m 4096 -smp 4 \
     $KVM_ARGS \
     -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
     -device ahci,id=ahci0 \
@@ -121,13 +121,18 @@ run_qemu_boot() {
     -display none \
     -no-reboot &
     local pid=$!
+    local ticks=0
     for i in $(seq 1 150); do
         if sudo grep -q "login:" "$LOG" 2>/dev/null; then QEMU_OK=1; break; fi
-        if ! kill -0 $pid 2>/dev/null; then QEMU_FAIL="QEMU murió"; break; fi
+        if ! kill -0 $pid 2>/dev/null; then QEMU_FAIL="QEMU murió (t=${ticks}s)"; break; fi
         if sudo grep -q "^grub> " "$LOG" 2>/dev/null; then QEMU_FAIL="GRUB cayó a grub>"; break; fi
         if sudo grep -q "Shell>" "$LOG" 2>/dev/null; then QEMU_FAIL="UEFI shell"; break; fi
+        ticks=$((ticks+2))
         sleep 2
     done
+    echo "espera terminada en ~${ticks}s: ok=$QEMU_OK fail=$QEMU_FAIL"
+    echo "== serial completo en este punto =="
+    sudo tail -25 "$LOG" 2>/dev/null
     sudo kill $pid 2>/dev/null || true
     wait $pid 2>/dev/null || true
     echo "boot intento terminado: ok=$QEMU_OK fail=$QEMU_FAIL"
