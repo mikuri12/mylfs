@@ -123,29 +123,16 @@ run_qemu_boot() {
 }
 
 step "arrancar QEMU con OVMF, esperar login (timeout 300s)"
-# OVMF con pflash: CODE + VARS separados (modo canónico).
-OVMF_CODE=""
-OVMF_VARS=""
-for c in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/ovmf/OVMF_CODE.cc.fd; do
-    [ -f "$c" ] && OVMF_CODE="$c" && break
+# IMPORTANTE: usar -bios con la imagen COMBINADA (/usr/share/ovmf/OVMF.fd).
+# Con pflash CODE_4M+VARS_4M la VM muere tras 'BdsDxe starting' (antes de
+# GRUB, probado 3x); con -bios combinado GRUB SÍ corre (visto: banner+grub>).
+OVMF=""
+for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd /usr/share/OVMF/OVMF_CODE_4M.fd; do
+    [ -f "$cand" ] && OVMF="$cand" && break
 done
-for v in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/ovmf/OVMF_VARS.cc.fd; do
-    [ -f "$v" ] && OVMF_VARS="$v" && break
-done
-if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
-    sudo cp "$OVMF_VARS" /tmp/OVMF_VARS.fd
-    OVMF_ARGS="-drive if=pflash,format=raw,readonly=on,file=$OVMF_CODE \
-               -drive if=pflash,format=raw,file=/tmp/OVMF_VARS.fd"
-    echo "OVMF pflash: code=$OVMF_CODE vars=$OVMF_VARS"
-else
-    OVMF=""
-    for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd; do
-        [ -f "$cand" ] && OVMF="$cand" && break
-    done
-    [ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; exit 1; }
-    OVMF_ARGS="-bios $OVMF"
-    echo "OVMF combinado: $OVMF"
-fi
+[ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; exit 1; }
+OVMF_ARGS="-bios $OVMF"
+echo "OVMF combinado: $OVMF"
 
 LOG=/mnt/work/qemu-boot.log
 
