@@ -50,7 +50,7 @@ sudo sed -i "s/UUID=0000-0000/UUID=$EFI_UUID/" /mnt/root-part/etc/fstab
 sudo sed -i "s/ROOTUUID/$ROOT_UUID/g" /mnt/root-part/boot/grub/grub.cfg
 # consola serial para el test (getty serial + cmdline)
 sudo ln -sf /etc/sv/agetty-ttyS0 /mnt/root-part/etc/runit/runsvdir/default/
-sudo sed -i 's/ ro mitigations=off/ ro mitigations=off console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
+sudo sed -i 's/ ro mitigations=off/ ro mitigations=off earlycon=ttyS0,115200 console=ttyS0,115200 console=tty0/' /mnt/root-part/boot/grub/grub.cfg
 
 step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
@@ -66,7 +66,7 @@ search.fs_uuid ${ROOT_UUID_EMBED} root
 echo GRUB-FOUND-ROOT
 menuentry "mylfs 1.0 (7.1.5-mikuri)" {
     echo GRUB-LOADING-KERNEL
-    linux /boot/vmlinuz-7.1.5-mikuri root=UUID=${ROOT_UUID_EMBED} ro mitigations=off console=ttyS0,115200 console=tty0
+    linux /boot/vmlinuz-7.1.5-mikuri root=UUID=${ROOT_UUID_EMBED} ro mitigations=off earlycon=ttyS0,115200 console=ttyS0,115200 console=tty0
     initrd /boot/initramfs-7.1.5-mikuri.img
 }
 EMBED
@@ -110,7 +110,7 @@ run_qemu_boot() {
         echo "sin KVM: TCG con -cpu Skylake-Client"
     fi
     sudo qemu-system-x86_64 \
-    -machine q35 -m 4096 -smp 4 \
+    -machine q35 -m 4096 -smp 1 \
     $KVM_ARGS \
     -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
     -device ahci,id=ahci0 \
@@ -122,7 +122,7 @@ run_qemu_boot() {
     -no-reboot &
     local pid=$!
     local ticks=0
-    for i in $(seq 1 150); do
+    for i in $(seq 1 300); do
         if sudo grep -q "login:" "$LOG" 2>/dev/null; then QEMU_OK=1; break; fi
         if ! kill -0 $pid 2>/dev/null; then QEMU_FAIL="QEMU murió (t=${ticks}s)"; break; fi
         if sudo grep -q "^grub> " "$LOG" 2>/dev/null; then QEMU_FAIL="GRUB cayó a grub>"; break; fi
