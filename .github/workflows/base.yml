@@ -181,17 +181,20 @@ jobs:
 
       - name: Descargar fuentes etapa 3 (manifiestos sha256)
         run: |
+          ok3=0
           for i in 1 2 3; do
-            if sudo bash base/download-sources.sh base/sources-12.4.stage3.tsv; then break; fi
+            if sudo bash base/download-sources.sh base/sources-12.4.stage3.tsv; then ok3=1; break; fi
             echo "descarga stage3 falló (intento $i), reintentando en 20s…"
             sleep 20
           done
+          [ $ok3 -eq 1 ] || { echo "stage3.tsv no descargó tras 3 intentos"; exit 1; }
+          okx=0
           for i in 1 2 3; do
-            if sudo bash base/download-sources.sh base/sources-extra.stage3.tsv; then exit 0; fi
+            if sudo bash base/download-sources.sh base/sources-extra.stage3.tsv; then okx=1; break; fi
             echo "descarga extras falló (intento $i), reintentando en 20s…"
             sleep 20
           done
-          exit 1
+          [ $okx -eq 1 ] || { echo "extras no descargó tras 3 intentos"; exit 1; }
 
       - name: Etapa 3 — sistema base final (LFS cap. 8 + extras del PLAN)
         run: sudo bash base/ch08.sh
