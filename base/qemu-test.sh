@@ -56,16 +56,16 @@ step "GRUB UEFI en el disco (binario determinista con mkstandalone)"
 ROOT_UUID_EMBED=$(sudo blkid -s UUID -o value ${LOOP}p2)
 sudo mkdir -p /mnt/root-part/boot/efi/EFI/BOOT
 cat > /tmp/embed.cfg <<EMBED
-# GRUB debe hablar por serial: la VM corre headless (-display none) y sin
-# esto TODOS los errores de GRUB van a la VGA invisible.
-insmod serial
-serial --unit=0 --speed=115200
-terminal_input --append serial
-terminal_output --append serial
+# BISECT: marcadores para localizar exactamente dónde muere GRUB.
+# (Los comandos 'serial' se quitaron: OVMF ya refleja la consola EFI al
+# serial — el banner de GRUB apareció sin ellos en corridas previas.)
+echo GRUB-CONFIG-STARTING
 set timeout=0
 set default=0
 search.fs_uuid ${ROOT_UUID_EMBED} root
+echo GRUB-FOUND-ROOT
 menuentry "mylfs 1.0 (7.1.5-mikuri)" {
+    echo GRUB-LOADING-KERNEL
     linux /boot/vmlinuz-7.1.5-mikuri root=UUID=${ROOT_UUID_EMBED} ro mitigations=off console=ttyS0,115200 console=tty0
     initrd /boot/initramfs-7.1.5-mikuri.img
 }
@@ -73,7 +73,7 @@ EMBED
 # Binario principal: grub-mkstandalone (config embebida completa)
 sudo grub-mkstandalone --format=x86_64-efi \
     --output=/mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI \
-    --modules="part_gpt part_msdos ext2 fat linux normal search search_fs_uuid echo test boot serial terminal" \
+    --modules="part_gpt part_msdos ext2 fat linux normal search search_fs_uuid echo test boot" \
     "boot/grub/grub.cfg=/tmp/embed.cfg"
 # Binario alternativo: grub-mkimage puro con config temprana embebida
 # (--config). El memdisk NO va como argumento posicional (lo trataría como
@@ -82,7 +82,7 @@ sudo grub-mkimage --format=x86_64-efi \
     --output=/tmp/BOOTX64-alt.efi \
     --prefix='(hd0,gpt2)/boot/grub' \
     --config=/tmp/embed.cfg \
-    part_gpt ext2 fat linux normal search search_fs_uuid echo test boot serial terminal
+    part_gpt ext2 fat linux normal search search_fs_uuid echo test boot
 sudo cp /tmp/BOOTX64-alt.efi /mnt/root-part/boot/efi/EFI/mylfs-alt.efi
 ls -la /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI /mnt/root-part/boot/efi/EFI/mylfs-alt.efi
 
