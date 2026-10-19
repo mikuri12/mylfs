@@ -99,16 +99,27 @@ run_qemu_boot() {
     sudo cp "$1" /mnt/root-part/boot/efi/EFI/BOOT/BOOTX64.EFI
     sudo umount /mnt/root-part/boot/efi 2>/dev/null || true
     rm -f "$LOG"
+    # CPU: el kernel mikuri es x86-64-v3 (AVX2/BMI2/FMA, README del repo).
+    # El qemu64 default NO tiene AVX2 → instrucción ilegal al bootear = VM muere.
+    # Skylake-Client modela el CPU objetivo (i3-6100) y QEMU 8.2+ lo emula.
+    if [ -w /dev/kvm ]; then
+        KVM_ARGS="-enable-kvm -cpu host"
+        echo "usando KVM con -cpu host"
+    else
+        KVM_ARGS="-cpu Skylake-Client"
+        echo "sin KVM: TCG con -cpu Skylake-Client"
+    fi
     sudo qemu-system-x86_64 \
-        -machine q35 -m 2048 -smp 2 \
-        -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
-        -device ahci,id=ahci0 \
-        -device ide-hd,drive=disk0,bus=ahci0.0 \
-        -net none \
-        $OVMF_ARGS \
-        -serial file:$LOG \
-        -display none \
-        -no-reboot &
+    -machine q35 -m 2048 -smp 2 \
+    $KVM_ARGS \
+    -drive file=$DISK,format=raw,if=none,id=disk0,index=0,media=disk \
+    -device ahci,id=ahci0 \
+    -device ide-hd,drive=disk0,bus=ahci0.0 \
+    -net none \
+    $OVMF_ARGS \
+    -serial file:$LOG \
+    -display none \
+    -no-reboot &
     local pid=$!
     for i in $(seq 1 150); do
         if sudo grep -q "login:" "$LOG" 2>/dev/null; then QEMU_OK=1; break; fi
