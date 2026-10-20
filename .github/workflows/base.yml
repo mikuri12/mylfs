@@ -286,13 +286,14 @@ jobs:
       - name: Release rootfs-base-v1 (tras QEMU verde)
         if: github.ref == 'refs/heads/main'
         run: |
-          cd /mnt/dist
-          cat > release-notes.txt << 'RNOTES'
+          # /mnt/dist es del root (creado con sudo): TODO el paso va con sudo,
+          # y las notas se escriben primero en /tmp (writable por runner).
+          cat > /tmp/release-notes.txt << 'RNOTES'
           Sistema base arrancable: LFS 12.4 (libro SysV) con runit, eudev,
           Linux-PAM + shadow con PAM, openssh, opendoas, dhcpcd, chrony,
           acpid, curl, ca-certificates, dracut, GRUB UEFI y kernel
           7.1.5-mikuri (CachyOS+BORE). Test QEMU+OVMF hasta login OK:
-          runit stage 1→2, agetty, hostname optiplex-mikuri.
+          runit stage 1→2, agetty, hostname optipex-mikuri.
 
           El tarball supera el límite de 2GB por asset de GitHub: va partido
           en rootfs-base.tar.zst.partNN. Reconstruir con:
@@ -300,13 +301,14 @@ jobs:
             sha256sum -c rootfs-base.tar.zst.sha256
             sudo tar --zstd -xpf rootfs-base.tar.zst -C /mnt --numeric-owner --keep-directory-symlink
           RNOTES
-          SIZE=$(stat -c%s rootfs-base.tar.zst)
-          echo "tamaño rootfs-base.tar.zst: $SIZE bytes"
-          split -b 1900M -d rootfs-base.tar.zst rootfs-base.tar.zst.part
-          sha256sum rootfs-base.tar.zst rootfs-base.tar.zst.part* > rootfs-base.tar.zst.sha256
+          cd /mnt/dist
+          sudo split -b 1900M -d rootfs-base.tar.zst rootfs-base.tar.zst.part
+          sudo sha256sum rootfs-base.tar.zst rootfs-base.tar.zst.part* > rootfs-base.tar.zst.sha256.tmp
+          sudo chown runner:runner rootfs-base.tar.zst.part* rootfs-base.tar.zst.sha256.tmp
+          sudo mv rootfs-base.tar.zst.sha256.tmp rootfs-base.tar.zst.sha256
           gh release create rootfs-base-v1 \
             --title "rootfs-base v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
-            --notes-file release-notes.txt \
+            --notes-file /tmp/release-notes.txt \
             rootfs-base.tar.zst.part* rootfs-base.tar.zst.sha256
         env:
           GH_TOKEN: ${{ github.token }}
