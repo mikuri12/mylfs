@@ -211,12 +211,11 @@ install -v -m755 command/sv /usr/bin/sv
 install -v -m755 command/svlogd /usr/bin/svlogd
 install -v -m755 command/chpst /usr/bin/chpst
 install -v -m755 command/utmpset /usr/bin/utmpset
-# /sbin/init → runit-init: dracut/kernel buscan /sbin/init (Void hace igual).
-# NOTA: /sbin es symlink a usr/sbin (usrmerge): NO crear /sbin/runit-init
-# (sería el mismo archivo). Solo init y runit.
+# /sbin/init → runit-init: el kernel/dracut buscan /sbin/init (Void igual).
+# NOTA usrmerge: /sbin ES usr/sbin (symlink). Cualquier otro symlink ahí es
+# el mismo archivo → ln -sf exit 1. SOLO init; runit ya vive en usr/sbin.
 mkdir -p /sbin
 ln -sfv /usr/sbin/runit-init /sbin/init
-ln -sfv /usr/sbin/runit /sbin/runit
 cd /sources
 rm -rf runit-void
 REOF
