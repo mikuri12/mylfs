@@ -307,6 +307,7 @@ jobs:
           sudo sha256sum rootfs-base.tar.zst rootfs-base.tar.zst.part* | sudo tee rootfs-base.tar.zst.sha256 > /dev/null
           sudo chown runner:runner rootfs-base.tar.zst.part* rootfs-base.tar.zst.sha256
           gh release create rootfs-base-v1 \
+            -R mikuri12/mylfs \
             --title "rootfs-base v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
             --notes-file /tmp/release-notes.txt \
             rootfs-base.tar.zst.part* rootfs-base.tar.zst.sha256
