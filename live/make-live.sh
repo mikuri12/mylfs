@@ -16,7 +16,9 @@ ISO=mylfs-live.iso
 LABEL="MYLFS_LIVE"
 
 rm -rf "$WORK"
-mkdir -p "$WORK"/{rootfs,isosrc/LiveOS,efi,initrd-work}
+mkdir -p "$WORK"/{isosrc/LiveOS,efi,initrd-work,dl}
+# NOTA: no crear $WORK/rootfs aquí — el mv de abajo RENOMBRA lfs → rootfs
+# (si rootfs ya existe, mv lo mete DENTRO: rootfs/lfs/...)
 
 # ============================================================================
 # 1) Extraer el rootfs base
