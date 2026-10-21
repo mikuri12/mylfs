@@ -44,9 +44,11 @@ echo "kernel: $VMLINUX"
 # ============================================================================
 step "lvm2 (dmsetup) en chroot"
 mkdir -p "$WORK/dl"
+# pagure.io (upstream de BLFS) caído: mirror del pool de Ubuntu noble,
+# MISMO tarball upstream (md5 7d5be185... = BLFS-git 12.4)
 curl -fsSL --retry 3 -o "$WORK/dl/libaio-0.3.113.tar.gz" \
-  "https://pagure.io/libaio/archive/libaio-0.3.113/libaio-0.3.113.tar.gz"
-echo "605237f35de238dfacc83bcae406d95d  $WORK/dl/libaio-0.3.113.tar.gz" | md5sum -c -
+  "https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio_0.3.113.orig.tar.gz"
+echo "7d5be185f20eeaae15e267419950aaf7  $WORK/dl/libaio-0.3.113.tar.gz" | md5sum -c -
 curl -fsSL --retry 3 -o "$WORK/dl/LVM2.2.03.34.tgz" \
   "https://sourceware.org/ftp/lvm2/LVM2.2.03.34.tgz"
 echo "947741079e22a35d76aefa99861b406a  $WORK/dl/LVM2.2.03.34.tgz" | md5sum -c -
