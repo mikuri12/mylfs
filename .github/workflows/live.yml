@@ -1,0 +1,105 @@
+name: live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'live/**'
+      - '.github/workflows/live.yml'
+  workflow_dispatch:
+
+# Fase 3 del PLAN (adelantada): ISO live de prueba desde el rootfs
+# validado. NO es instalador: arranca por USB sin tocar el disco.
+# squashfs zstd + overlayfs en RAM + dracut dmsquash-live + GRUB UEFI.
+
+permissions:
+  contents: write
+
+jobs:
+  live-iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Estado del disco
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          df -h /
+
+      - name: Instalar herramientas de la ISO (grub/xorriso/squashfs)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq grub-pc-bin grub-efi-amd64-bin xorriso squashfs-tools mtools
+
+      - name: Descargar rootfs validado (release rootfs-base-v1)
+        run: |
+          mkdir -p incoming
+          gh release download rootfs-base-v1 -R mikuri12/mylfs -D incoming \
+            --pattern 'rootfs-base.tar.zst.part*' --pattern '*.sha256'
+          cat incoming/rootfs-base.tar.zst.part* > incoming/rootfs-base.tar.zst
+          grep 'rootfs-base.tar.zst$' incoming/rootfs-base.tar.zst.sha256 | ( cd incoming && sha256sum -c - )
+          rm -f incoming/rootfs-base.tar.zst.part*
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Construir ISO (live/make-live.sh)
+        run: |
+          bash live/make-live.sh "$(pwd)/incoming/rootfs-base.tar.zst"
+
+      - name: Test QEMU + OVMF hasta login (consola serial)
+        run: |
+          # OVMF combinado (lección de stage4: pflash 4M muere pre-GRUB)
+          OVMF=$(find /usr/share/OVMF -name 'OVMF.fd' 2>/dev/null | head -1)
+          [ -n "$OVMF" ] || sudo apt-get install -y -qq ovmf
+          OVMF=$(find /usr/share/OVMF -name 'OVMF.fd' | head -1)
+          echo "OVMF: $OVMF"
+          mkdir -p serial && : > serial/console.log
+          timeout 600 qemu-system-x86_64 \
+            -machine q35 -cpu max -m 4096 -smp 2 \
+            -bios "$OVMF" \
+            -cdrom mylfs-live.iso \
+            -display none -no-reboot \
+            -serial file:serial/console.log \
+            -netdev user,id=n0 -device e1000,netdev=n0 2>&1 | tail -5
+          echo "=== últimas líneas del serial ==="
+          tail -20 serial/console.log
+          grep -q "login:" serial/console.log && echo "QEMU ARRANCÓ HASTA LOGIN ✓" || {
+            echo "no llegó al login"; tail -40 serial/console.log; exit 1; }
+
+      - name: Release live-vN (tras QEMU verde)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          SIZE=$(stat -c%s mylfs-live.iso)
+          echo "tamaño ISO: $SIZE bytes"
+          if [ "$SIZE" -lt 1900000000 ]; then
+            cp mylfs-live.iso.sha256 .
+            gh release view live-v1 -R mikuri12/mylfs >/dev/null 2>&1 || \
+              gh release create live-v1 -R mikuri12/mylfs \
+                --title "mylfs-live v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
+                --notes-file live/RELEASE-NOTES.md
+            gh release upload live-v1 -R mikuri12/mylfs --clobber \
+              mylfs-live.iso mylfs-live.iso.sha256
+          else
+            split -b 1900M -d mylfs-live.iso mylfs-live.iso.part
+            sha256sum mylfs-live.iso mylfs-live.iso.part* | sudo tee mylfs-live.iso.sha256 > /dev/null
+            sudo chown runner:runner mylfs-live.iso.part* mylfs-live.iso.sha256
+            gh release view live-v1 -R mikuri12/mylfs >/dev/null 2>&1 || \
+              gh release create live-v1 -R mikuri12/mylfs \
+                --title "mylfs-live v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
+                --notes-file live/RELEASE-NOTES.md
+            gh release upload live-v1 -R mikuri12/mylfs --clobber \
+              mylfs-live.iso.part* mylfs-live.iso.sha256
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Subir ISO como artifact (respaldo de 1 día)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mylfs-live-iso
+          path: mylfs-live.iso
+          retention-days: 1
