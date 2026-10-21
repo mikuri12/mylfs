@@ -75,45 +75,19 @@ trap cleanup_mounts EXIT
 sudo cp "$WORK"/dl/* "$WORK/rootfs/sources/"
 sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
   PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
-  bash -e -c '
-    set -euo pipefail
-    cd /sources
-    rm -rf libaio-0.3.113 LVM2.2.03.34
-    tar -xpf libaio-0.3.113.tar.gz && cd libaio-0.3.113
-    make -j$(nproc)
-    make install
-    cd .. && rm -rf libaio-0.3.113
-    tar -xpf LVM2.2.03.34.tgz && cd LVM2.2.03.34
-    # dm-only: sin udev sync, sin NLS, sin readline, sin tests (PLAN: RUN_TESTS=0)
-    ./configure --prefix=/usr \
-      --with-default-locking-dir=/run/lock/lvm \
-      --with-default-run-dir=/run/lvm \
-      --disable-udev-systemd-background-jobs \
-      --disable-nls --disable-readline \
-      --disable-tests
-    make -j$(nproc) device-mapper
-    make install_device-mapper
-  '
-# VERIFY: dmsetup presente en el chroot
-sudo test -x "$WORK/rootfs/usr/sbin/dmsetup" || { echo "dmsetup no instalado"; exit 1; }
-step "dmsetup OK"
-
-# ============================================================================
-# 4) Usuario live + config de sesión live (contraseña live de prueba)
-# ============================================================================
-step "usuario live"
-# OJO: en el chroot los grupos video/audio/input/wheel/seat existen (stage4
-# los usó para mikuri). Sin 2>/dev/null ni || true: si useradd falla, el
-# chpasswd posterior diría "User not known" y ocultaríamos la causa.
-sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
-  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
-  bash -e -c '
+  bash -e << 'LIVEOF'
     set -euo pipefail
     # usuario live con contraseña de prueba (documentada en README)
     useradd -m -G video,audio,input,wheel,seat -s /bin/bash live
-    echo "live:mylfs" | chpasswd
-    # root también con contraseña de prueba (solo ISO de prueba)
-    echo "root:mylfs" | chpasswd
+    # chpasswd atraviesa pam_chauthtok: la base tiene ENCRYPT_METHOD
+    # comentado (sed BLFS) y pam_unix rechaza el cambio ('Authentication
+    # token manipulation error'). usermod -p planta el hash DIRECTO.
+    # Yescrypt ($y$) con python3-crypt del propio chroot: mismo algoritmo
+    # que pam_unix verifica (system-password: 'yescrypt').
+    HASH_LIVE=$(python3 -c 'import crypt; print(crypt.crypt("mylfs", crypt.mksalt(crypt.METHOD_YESCRYPT)))')
+    usermod -p "$HASH_LIVE" live
+    HASH_ROOT=$(python3 -c 'import crypt; print(crypt.crypt("mylfs", crypt.mksalt(crypt.METHOD_YESCRYPT)))')
+    usermod -p "$HASH_ROOT" root
     # hostname live
     echo "mylfs-live" > /etc/hostname
     # getty serial SOLO para la ISO (test CI por serial; en tu PC tty1/2
@@ -144,8 +118,7 @@ BAUD_RATE=115200
 TERM_NAME=linux
 AGEOF
     ln -sf /etc/sv/agetty-ttyS0 /etc/runit/runsvdir/default/
-  '
-
+LIVEOF
 # ============================================================================
 # 5) Initramfs con dracut: dmsquash-live + overlayfs + serial
 # ============================================================================
