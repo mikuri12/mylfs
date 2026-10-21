@@ -61,7 +61,15 @@ sudo mount -vt proc proc "$WORK/rootfs/proc"
 sudo mount -vt sysfs sysfs "$WORK/rootfs/sys"
 sudo mount -vt tmpfs tmpfs "$WORK/rootfs/run"
 sudo mount -vt tmpfs -o nosuid,nodev tmpfs "$WORK/rootfs/dev/shm"
-trap 'sudo umount -l "$WORK"/rootfs/dev/pts "$WORK"/rootfs/dev/shm "$WORK"/rootfs/sys "$WORK"/rootfs/proc "$WORK"/rootfs/run "$WORK/rootfs/dev 2>/dev/null || true' EXIT
+cleanup_mounts() {
+  sudo umount -l "$WORK/rootfs/dev/pts" 2>/dev/null || true
+  sudo umount -l "$WORK/rootfs/dev/shm" 2>/dev/null || true
+  sudo umount -l "$WORK/rootfs/sys" 2>/dev/null || true
+  sudo umount -l "$WORK/rootfs/proc" 2>/dev/null || true
+  sudo umount -l "$WORK/rootfs/run" 2>/dev/null || true
+  sudo umount -l "$WORK/rootfs/dev" 2>/dev/null || true
+}
+trap cleanup_mounts EXIT
 
 # libaio + lvm2 — comandos BLFS, configure --prefix=/usr, solo lo necesario
 sudo cp "$WORK"/dl/* "$WORK/rootfs/sources/"
@@ -94,16 +102,48 @@ step "dmsetup OK"
 # 4) Usuario live + config de sesión live (contraseña live de prueba)
 # ============================================================================
 step "usuario live"
+# OJO: en el chroot los grupos video/audio/input/wheel/seat existen (stage4
+# los usó para mikuri). Sin 2>/dev/null ni || true: si useradd falla, el
+# chpasswd posterior diría "User not known" y ocultaríamos la causa.
 sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
   PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
   bash -e -c '
     set -euo pipefail
     # usuario live con contraseña de prueba (documentada en README)
-    groupadd -f live
-    useradd -m -G video,audio,input,wheel,seat -s /bin/bash live 2>/dev/null || true
+    useradd -m -G video,audio,input,wheel,seat -s /bin/bash live
     echo "live:mylfs" | chpasswd
+    # root también con contraseña de prueba (solo ISO de prueba)
+    echo "root:mylfs" | chpasswd
     # hostname live
     echo "mylfs-live" > /etc/hostname
+    # getty serial SOLO para la ISO (test CI por serial; en tu PC tty1/2
+    # siguen igual). Mismo patrón run de void-runit agetty-ttyN.
+    mkdir -p /etc/sv/agetty-ttyS0
+    cat > /etc/sv/agetty-ttyS0/run << 'AGEOF'
+#!/bin/sh
+
+tty=${PWD##*-}
+
+[ -r conf ] && . ./conf
+
+if [ -x /sbin/getty -o -x /bin/getty ]; then
+	# busybox
+	GETTY=getty
+elif [ -x /sbin/agetty -o -x /bin/agetty ]; then
+	# util-linux
+	GETTY=agetty
+fi
+
+exec chpst -P ${GETTY} ${GETTY_ARGS} \
+	"${tty}" "${BAUD_RATE}" "${TERM_NAME}"
+AGEOF
+    chmod 755 /etc/sv/agetty-ttyS0/run
+    # conf: velocidad serial (void-runit deja GETTY_ARGS vacío por defecto)
+    cat > /etc/sv/agetty-ttyS0/conf << 'AGEOF'
+BAUD_RATE=115200
+TERM_NAME=linux
+AGEOF
+    ln -sf /etc/sv/agetty-ttyS0 /etc/runit/runsvdir/default/
   '
 
 # ============================================================================
