@@ -74,7 +74,7 @@ trap cleanup_mounts EXIT
 # libaio + lvm2 — comandos BLFS, configure --prefix=/usr, solo lo necesario
 sudo cp "$WORK"/dl/* "$WORK/rootfs/sources/"
 sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
-  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
+  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX LIVE_HASH="$(openssl passwd -6 mylfs)" \
   bash -e << 'LIVEOF'
     set -euo pipefail
     # usuario live con contraseña de prueba (documentada en README)
@@ -82,12 +82,12 @@ sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
     # chpasswd atraviesa pam_chauthtok: la base tiene ENCRYPT_METHOD
     # comentado (sed BLFS) y pam_unix rechaza el cambio ('Authentication
     # token manipulation error'). usermod -p planta el hash DIRECTO.
-    # Yescrypt ($y$) con python3-crypt del propio chroot: mismo algoritmo
-    # que pam_unix verifica (system-password: 'yescrypt').
-    HASH_LIVE=$(python3 -c 'import crypt; print(crypt.crypt("mylfs", crypt.mksalt(crypt.METHOD_YESCRYPT)))')
-    usermod -p "$HASH_LIVE" live
-    HASH_ROOT=$(python3 -c 'import crypt; print(crypt.crypt("mylfs", crypt.mksalt(crypt.METHOD_YESCRYPT)))')
-    usermod -p "$HASH_ROOT" root
+    # Hash SHA-512 ($6$) con openssl del RUNNER (host): python3 del chroot
+    # es 3.13 y ya NO tiene módulo crypt (PEP 594), y whois/mkpasswd no
+    # está en LFS. pam_unix verifica por PREFIJO del hash guardado, así
+    # que $6$ (libxcrypt strong) autentica igual que $y$.
+    usermod -p "$LIVE_HASH" live
+    usermod -p "$LIVE_HASH" root
     # hostname live
     echo "mylfs-live" > /etc/hostname
     # getty serial SOLO para la ISO (test CI por serial; en tu PC tty1/2
