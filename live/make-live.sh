@@ -187,8 +187,13 @@ grub-mkrescue -o "$ISO" "$WORK/isosrc" 2>/dev/null || sudo grub-mkrescue -o "$IS
 step "verificación ISO"
 ls -la "$ISO"
 sha256sum "$ISO" > "${ISO}.sha256"
-# que exista LiveOS/squashfs.img dentro de la ISO
-xorriso -osirrox on -indev "$ISO" -extract /LiveOS "$WORK/extract-check" 2>/dev/null || \
-  sudo xorriso -osirrox on -indev "$ISO" -extract /LiveOS "$WORK/extract-check"
-ls -la "$WORK/extract-check/LiveOS/"
+# verificación de contenido: LISTAR la ISO y confirmar los archivos clave
+# (xorriso -extract con rutas relativas falla silencioso; -ls es directo)
+xorriso -indev "$ISO" -ls / 2>/dev/null | head -20
+xorriso -indev "$ISO" -ls /LiveOS 2>/dev/null | head -10
+for f in /LiveOS/squashfs.img /boot/vmlinuz-mikuri /boot/initramfs-live.img /boot/grub/grub.cfg; do
+  n=$(xorriso -indev "$ISO" -find "$f" 2>/dev/null | grep -c "exists")
+  [ "$n" -ge 1 ] || { echo "FALTA $f en la ISO"; exit 1; }
+  echo "ISO contiene: $f"
+done
 echo "==> ISO lista: $ISO"
