@@ -112,6 +112,16 @@ sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
     usermod -p "$LIVE_HASH" live
     usermod -p "$LIVE_HASH" root
     echo "mylfs-live" > /etc/hostname
+    # fstab de LIVE: el fstab de la base trae UUID placeholder (para el
+    # disco real al instalar) y void-runit corre fsck -A + mount -a sobre
+    # él → emergency shell. En live SOLO pseudo-fs; nada que montar.
+    printf '%s\\n' \
+      '# mylfs-live fstab: solo pseudo-filesystems (overlay RAM)' \
+      'tmpfs /tmp tmpfs nosuid,nodev 0 0' \
+      'devtmpfs /dev devtmpfs mode=0755,nosuid 0 0' \
+      'proc /proc proc nosuid,noexec,nodev 0 0' \
+      'sysfs /sys sysfs nosuid,noexec,nodev 0 0' \
+      > /etc/fstab
     # getty serial SOLO para la ISO (patrón void-runit; sin heredocs
     # anidados: printf, para que los delimitadores cierren siempre)
     mkdir -p /etc/sv/agetty-ttyS0
