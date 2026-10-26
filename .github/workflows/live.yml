@@ -30,10 +30,11 @@ jobs:
             /usr/local/.ghcup /opt/hostedtoolcache/CodeQL 2>/dev/null || true
           df -h /
 
-      - name: Instalar herramientas de la ISO (grub/xorriso/squashfs)
+      - name: Instalar herramientas de la ISO (grub/xorriso/squashfs/qemu)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq grub-pc-bin grub-efi-amd64-bin xorriso squashfs-tools mtools
+          sudo apt-get install -y -qq grub-pc-bin grub-efi-amd64-bin xorriso squashfs-tools mtools \
+            qemu-system-x86 ovmf
 
       - name: Descargar rootfs validado (release rootfs-base-v1)
         run: |
