@@ -143,7 +143,10 @@ sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
       --add "dmsquash-live overlayfs" \
       /initramfs-live.img "$KVER"
   '
+# dracut corre en el chroot (root); recuperar el initramfs con sudo + chown
 sudo mv "$WORK/rootfs/initramfs-live.img" "$WORK/initramfs-live.img"
+sudo chown "$(id -un):$(id -gn)" "$WORK/initramfs-live.img"
+ls -la "$WORK/initramfs-live.img"
 
 # ============================================================================
 #  híbrida: GRUB (xorriso): BIOS + UEFI, label MYLFS_LIVE
