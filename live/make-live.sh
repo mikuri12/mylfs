@@ -71,52 +71,60 @@ cleanup_mounts() {
 }
 trap cleanup_mounts EXIT
 
-# libaio + lvm2 — comandos BLFS, configure --prefix=/usr, solo lo necesario
+# libaio + lvm2 — comandos BLFS (dm-only: dmsetup para dmsquash-live)
 sudo cp "$WORK"/dl/* "$WORK/rootfs/sources/"
 sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
-  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX LIVE_HASH="$(openssl passwd -6 mylfs)" \
+  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
+  bash -e << 'DMEOF'
+    set -euo pipefail
+    cd /sources
+    rm -rf libaio-0.3.113 LVM2.2.03.34
+    tar -xpf libaio-0.3.113.tar.gz && cd libaio-0.3.113
+    make -j"$(nproc)"
+    make install
+    cd .. && rm -rf libaio-0.3.113
+    tar -xpf LVM2.2.03.34.tgz && cd LVM2.2.03.34
+    ./configure --prefix=/usr \
+      --with-default-locking-dir=/run/lock/lvm \
+      --with-default-run-dir=/run/lvm \
+      --disable-udev-systemd-background-jobs \
+      --disable-nls --disable-readline --disable-tests
+    make -j"$(nproc)" device-mapper
+    make install_device-mapper
+DMEOF
+# VERIFY: dmsetup presente en el chroot (dracut módulo dm lo exige)
+sudo test -x "$WORK/rootfs/usr/sbin/dmsetup" || { echo "dmsetup no instalado"; exit 1; }
+step "dmsetup OK"
+
+# ============================================================================
+# 4) Usuario live + config de sesión live (contraseña live de prueba)
+# ============================================================================
+step "usuario live"
+# Hash SHA-512 de "mylfs" con openssl DEL RUNNER: el python3 del chroot es
+# 3.13 (sin módulo crypt, PEP 594) y whois/mkpasswd no está en LFS.
+# usermod -p planta el hash directo; pam_unix autentica por prefijo.
+LIVE_HASH=$(openssl passwd -6 "mylfs")
+sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
+  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX LIVE_HASH="$LIVE_HASH" \
   bash -e << 'LIVEOF'
     set -euo pipefail
-    # usuario live con contraseña de prueba (documentada en README)
     useradd -m -G video,audio,input,wheel,seat -s /bin/bash live
-    # chpasswd atraviesa pam_chauthtok: la base tiene ENCRYPT_METHOD
-    # comentado (sed BLFS) y pam_unix rechaza el cambio ('Authentication
-    # token manipulation error'). usermod -p planta el hash DIRECTO.
-    # Hash SHA-512 ($6$) con openssl del RUNNER (host): python3 del chroot
-    # es 3.13 y ya NO tiene módulo crypt (PEP 594), y whois/mkpasswd no
-    # está en LFS. pam_unix verifica por PREFIJO del hash guardado, así
-    # que $6$ (libxcrypt strong) autentica igual que $y$.
     usermod -p "$LIVE_HASH" live
     usermod -p "$LIVE_HASH" root
-    # hostname live
     echo "mylfs-live" > /etc/hostname
-    # getty serial SOLO para la ISO (test CI por serial; en tu PC tty1/2
-    # siguen igual). Mismo patrón run de void-runit agetty-ttyN.
+    # getty serial SOLO para la ISO (patrón void-runit; sin heredocs
+    # anidados: printf, para que los delimitadores cierren siempre)
     mkdir -p /etc/sv/agetty-ttyS0
-    cat > /etc/sv/agetty-ttyS0/run << 'AGEOF'
-#!/bin/sh
-
-tty=${PWD##*-}
-
-[ -r conf ] && . ./conf
-
-if [ -x /sbin/getty -o -x /bin/getty ]; then
-	# busybox
-	GETTY=getty
-elif [ -x /sbin/agetty -o -x /bin/agetty ]; then
-	# util-linux
-	GETTY=agetty
-fi
-
-exec chpst -P ${GETTY} ${GETTY_ARGS} \
-	"${tty}" "${BAUD_RATE}" "${TERM_NAME}"
-AGEOF
+    printf '%s\n' \
+      '#!/bin/sh' '' 'tty=${PWD##*-}' '' '[ -r conf ] && . ./conf' \
+      '' 'if [ -x /sbin/getty -o -x /bin/getty ]; then' \
+      '	GETTY=getty' \
+      'elif [ -x /sbin/agetty -o -x /bin/agetty ]; then' \
+      '	GETTY=agetty' 'fi' '' \
+      'exec chpst -P ${GETTY} ${GETTY_ARGS} "${tty}" "${BAUD_RATE}" "${TERM_NAME}"' \
+      > /etc/sv/agetty-ttyS0/run
     chmod 755 /etc/sv/agetty-ttyS0/run
-    # conf: velocidad serial (void-runit deja GETTY_ARGS vacío por defecto)
-    cat > /etc/sv/agetty-ttyS0/conf << 'AGEOF'
-BAUD_RATE=115200
-TERM_NAME=linux
-AGEOF
+    printf '%s\n' 'BAUD_RATE=115200' 'TERM_NAME=linux' > /etc/sv/agetty-ttyS0/conf
     ln -sf /etc/sv/agetty-ttyS0 /etc/runit/runsvdir/default/
 LIVEOF
 # ============================================================================
