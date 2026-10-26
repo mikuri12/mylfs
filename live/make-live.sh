@@ -187,13 +187,17 @@ grub-mkrescue -o "$ISO" "$WORK/isosrc" 2>/dev/null || sudo grub-mkrescue -o "$IS
 step "verificación ISO"
 ls -la "$ISO"
 sha256sum "$ISO" > "${ISO}.sha256"
-# verificación de contenido: LISTAR la ISO y confirmar los archivos clave
-# (xorriso -extract con rutas relativas falla silencioso; -ls es directo)
-xorriso -indev "$ISO" -ls / 2>/dev/null | head -20
-xorriso -indev "$ISO" -ls /LiveOS 2>/dev/null | head -10
-for f in /LiveOS/squashfs.img /boot/vmlinuz-mikuri /boot/initramfs-live.img /boot/grub/grub.cfg; do
-  n=$(xorriso -indev "$ISO" -find "$f" 2>/dev/null | grep -c "exists")
-  [ "$n" -ge 1 ] || { echo "FALTA $f en la ISO"; exit 1; }
-  echo "ISO contiene: $f"
-done
+# Verificación por LISTADO (-ls imprime 'nombre' citado; -find tiene
+# formato distinto al que asumí y el grep fallaba siempre).
+iso_has() {  # iso_has <dir> <archivo>
+  xorriso -indev "$ISO" -ls "$1" 2>/dev/null | grep -q "'$2'"
+}
+iso_has /LiveOS squashfs.img      || { echo "FALTA /LiveOS/squashfs.img"; exit 1; }
+echo "ISO contiene: /LiveOS/squashfs.img"
+iso_has /boot vmlinuz-mikuri      || { echo "FALTA /boot/vmlinuz-mikuri"; exit 1; }
+echo "ISO contiene: /boot/vmlinuz-mikuri"
+iso_has /boot initramfs-live.img  || { echo "FALTA /boot/initramfs-live.img"; exit 1; }
+echo "ISO contiene: /boot/initramfs-live.img"
+iso_has /boot/grub grub.cfg        || { echo "FALTA /boot/grub/grub.cfg"; exit 1; }
+echo "ISO contiene: /boot/grub/grub.cfg"
 echo "==> ISO lista: $ISO"
