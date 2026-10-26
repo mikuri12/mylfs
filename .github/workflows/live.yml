@@ -53,10 +53,14 @@ jobs:
 
       - name: Test QEMU + OVMF hasta login (consola serial)
         run: |
-          # OVMF combinado (lección de stage4: pflash 4M muere pre-GRUB)
-          OVMF=$(find /usr/share/OVMF -name 'OVMF.fd' 2>/dev/null | head -1)
-          [ -n "$OVMF" ] || sudo apt-get install -y -qq ovmf
-          OVMF=$(find /usr/share/OVMF -name 'OVMF.fd' | head -1)
+          # Ruta OVMF COMBINADA — igual que base/qemu-test.sh (que sí bootea):
+          # apt pone la imagen en /usr/share/ovmf/OVMF.fd; con -bios combinado
+          # GRUB corre; pflash 4M separado muere pre-GRUB (lección fase 1).
+          OVMF=""
+          for cand in /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd /usr/share/OVMF/OVMF_CODE_4M.fd; do
+            [ -f "$cand" ] && OVMF="$cand" && break
+          done
+          [ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; exit 1; }
           echo "OVMF: $OVMF"
           mkdir -p serial && : > serial/console.log
           timeout 600 qemu-system-x86_64 \
