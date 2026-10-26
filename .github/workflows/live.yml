@@ -81,7 +81,7 @@ jobs:
           SIZE=$(stat -c%s mylfs-live.iso)
           echo "tamaño ISO: $SIZE bytes"
           if [ "$SIZE" -lt 1900000000 ]; then
-            cp mylfs-live.iso.sha256 .
+            # mylfs-live.iso.sha256 ya lo generó make-live.sh en el cwd
             gh release view live-v1 -R mikuri12/mylfs >/dev/null 2>&1 || \
               gh release create live-v1 -R mikuri12/mylfs \
                 --title "mylfs-live v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
