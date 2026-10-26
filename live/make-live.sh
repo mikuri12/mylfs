@@ -169,7 +169,7 @@ set menu_color_normal=white/black
 set menu_color_highlight=black/light-gray
 
 menuentry "mylfs live (rootfs-base-v1 + mikuri 7.1.5)" {
-    linux /boot/vmlinuz-mikuri root=live:LABEL=MYLFS_LIVE rd.live.image rd.live.overlay.overlayfs=1 console=ttyS0,115200 console=tty0
+    linux /boot/vmlinuz-mikuri root=live:LABEL=MYLFS_LIVE rd.live.image rd.live.overlay.overlayfs=1 mitigations=off console=ttyS0,115200
     initrd /boot/initramfs-live.img
 }
 GRUBEOF
@@ -178,7 +178,10 @@ GRUBEOF
 cp "$WORK/isosrc/boot/grub/grub.cfg" "$WORK/isosrc/EFI/BOOT/grub.cfg"
 
 # xorriso: ISO híbrida (BIOS+UEFI) con grub-mkrescue
-grub-mkrescue -o "$ISO" "$WORK/isosrc" 2>/dev/null || sudo grub-mkrescue -o "$ISO" "$WORK/isosrc"
+# -- -volid MYLFS_LIVE: el label del volumen es lo que dracut matchea
+# con root=live:LABEL=MYLFS_LIVE (sin esto, nunca encuentra el LiveOS).
+grub-mkrescue -o "$ISO" "$WORK/isosrc" -- -volid MYLFS_LIVE 2>/dev/null || \
+  sudo grub-mkrescue -o "$ISO" "$WORK/isosrc" -- -volid MYLFS_LIVE
 [ -f "$ISO" ] || { echo "no se generó la ISO"; exit 1; }
 
 # ============================================================================
