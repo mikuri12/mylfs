@@ -11,6 +11,7 @@
 set -euo pipefail
 
 ROOTFS_TAR=$1
+PKGS_DIR=${2:-}   # FASE 3: dir con los .tar.zst del Release 'packages' de mymypkgs
 WORK=$(pwd)/live-work
 ISO=mylfs-live.iso
 LABEL="MYLFS_LIVE"
@@ -97,6 +98,78 @@ sudo test -x "$WORK/rootfs/usr/sbin/dmsetup" || { echo "dmsetup no instalado"; e
 step "dmsetup OK"
 
 # ============================================================================
+# 3b) Paquetes del escritorio (Release 'packages' de mymypkgs) — FASE 3
+#     PKGS_DIR (2º arg): .tar.zst descargados por el workflow. Se extraen
+#     sobre el rootfs (las deps ya se resolvieron al compilar en capas, así
+#     que el orden de extracción no importa) y ldconfig al final.
+#     linux-mikuri NO se instala: el kernel ya viene en el rootfs.
+# ============================================================================
+if [ -n "$PKGS_DIR" ] && ls "$PKGS_DIR"/*.tar.zst >/dev/null 2>&1; then
+  step "instalar paquetes mymypkgs ($(ls "$PKGS_DIR"/*.tar.zst 2>/dev/null | wc -l) tarballs)"
+  n=0
+  for p in "$PKGS_DIR"/*.tar.zst; do
+    case "$(basename "$p")" in linux-mikuri-*) continue ;; esac
+    sudo tar --zstd -xpf "$p" -C "$WORK/rootfs" --numeric-owner --keep-directory-symlink
+    rm -f "$p"   # liberar disco del runner tras extraer
+    n=$((n+1))
+  done
+  echo "instalados $n paquetes en el rootfs"
+  sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
+    PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
+    bash -e -c 'ldconfig 2>/dev/null || true; command -v fc-cache >/dev/null 2>&1 && fc-cache -f >/dev/null 2>&1 || true; true'
+  step "paquetes OK + ldconfig"
+else
+  step "sin PKGS_DIR: ISO solo con rootfs base (live-v1)"
+fi
+
+# ============================================================================
+# 3c) Sesión de escritorio — FASE 3: greetd + noctalia-greeter + runit
+#     Los paquetes ya traen /etc/sv/{seatd,turnstiled,dbus,greetd}/run y
+#     /usr/share/mymy/user-services/* (turnstile). Aquí: usuario greeter,
+#     config de greetd (vt1 + noctalia-greeter-session), PAM de greetd con
+#     pam_turnstile, servicios en runsvdir y marker serial para el test QEMU.
+# ============================================================================
+step "configurar sesión de escritorio (greetd/noctalia-greeter/runit)"
+sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
+  PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
+  bash -e << 'SESEOF'
+set -euo pipefail
+# usuario greeter (el setup script de noctalia-greeter crea /var/lib)
+if ! id greeter >/dev/null 2>&1; then
+  useradd -r -d /var/lib/noctalia-greeter -s /usr/sbin/nologin -G video,input,seat greeter
+fi
+install -d -o greeter -g greeter /var/lib/noctalia-greeter 2>/dev/null || {
+  mkdir -p /var/lib/noctalia-greeter; chown greeter:greeter /var/lib/noctalia-greeter; }
+# config de greetd: greeter de Noctalia en vt1 (printf: evita heredocs anidados)
+printf '%s\n' '[terminal]' 'vt = 1' '' '[default_session]' \
+  'command = "/usr/bin/noctalia-greeter-session"' 'user = "greeter"' \
+  > /etc/greetd/config.toml
+# PAM de greetd: pam_unix + pam_turnstile si el módulo está (turnstile)
+{
+  echo '# greetd PAM (mylfs-live)'
+  echo 'auth     required  pam_unix.so'
+  [ -f /usr/lib/security/pam_turnstile.so ] && echo 'auth     optional  pam_turnstile.so'
+  echo 'account  required  pam_unix.so'
+  echo 'session  required  pam_unix.so'
+  [ -f /usr/lib/security/pam_turnstile.so ] && echo 'session  optional  pam_turnstile.so'
+} > /etc/pam.d/greetd
+# servicios del sistema (void-runit runsvdir)
+for s in seatd turnstiled dbus greetd; do
+  [ -d "/etc/sv/$s" ] && ln -sf "/etc/sv/$s" /etc/runit/runsvdir/default/
+done
+# marker para el test QEMU por consola serial (autologin imprime estado)
+printf '%s\n' \
+  '#!/bin/sh' \
+  'echo "MYLFS_LIVE_READY tty=$(tty 2>/dev/null)"' \
+  'for s in seatd turnstiled dbus greetd; do' \
+  '  printf "MYLFS_SVC %s: %s\n" "$s" "$(sv status /etc/sv/$s 2>&1 | head -1)"' \
+  'done' \
+  > /etc/profile.d/mylfs-live-check.sh
+chmod 755 /etc/profile.d/mylfs-live-check.sh
+SESEOF
+step "sesión OK"
+
+# ============================================================================
 # 4) Usuario live + config de sesión live (contraseña live de prueba)
 # ============================================================================
 step "usuario live"
@@ -134,7 +207,7 @@ sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
       'exec chpst -P ${GETTY} ${GETTY_ARGS} "${tty}" "${BAUD_RATE}" "${TERM_NAME}"' \
       > /etc/sv/agetty-ttyS0/run
     chmod 755 /etc/sv/agetty-ttyS0/run
-    printf '%s\n' 'BAUD_RATE=115200' 'TERM_NAME=linux' > /etc/sv/agetty-ttyS0/conf
+    printf '%s\n' 'BAUD_RATE=115200' 'TERM_NAME=linux' 'GETTY_ARGS=--autologin live' > /etc/sv/agetty-ttyS0/conf
     ln -sf /etc/sv/agetty-ttyS0 /etc/runit/runsvdir/default/
 LIVEOF
 # ============================================================================
@@ -178,7 +251,7 @@ set timeout=3
 set menu_color_normal=white/black
 set menu_color_highlight=black/light-gray
 
-menuentry "mylfs live (rootfs-base-v1 + mikuri 7.1.5)" {
+menuentry "mylfs live v2 (rootfs-base-v1 + escritorio + mikuri 7.1.5)" {
     linux /boot/vmlinuz-mikuri root=live:LABEL=MYLFS_LIVE rd.live.image rd.live.overlay.overlayfs=1 mitigations=off console=ttyS0,115200
     initrd /boot/initramfs-live.img
 }

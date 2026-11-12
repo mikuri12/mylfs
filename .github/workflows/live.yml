@@ -18,7 +18,7 @@ permissions:
 jobs:
   live-iso:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -47,11 +47,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Descargar paquetes del escritorio (Release 'packages' de mymypkgs)
+        # FASE 3: la ISO lleva el rootfs base + TODOS los paquetes publicados
+        # (menos linux-mikuri: el kernel ya está en el rootfs). Se listan por
+        # API (browser_download_url), no por index.toml (puede estar stale).
+        run: |
+          mkdir -p pkgs
+          gh api repos/mikuri12/mymypkgs/releases/tags/packages --paginate \
+            --jq '.assets[].browser_download_url' \
+            | grep '\.tar\.zst$' | grep -v '/linux-mikuri-' > pkgs/list.txt
+          echo "$(wc -l < pkgs/list.txt) paquetes a descargar"
+          while read -r u; do
+            f=$(basename "$u")
+            [ -f "pkgs/$f" ] && continue
+            for i in 1 2 3 4 5; do
+              curl -fsSL --retry 3 --retry-all-errors -o "pkgs/$f" "$u" && break
+              echo "retry $f ($i)"; sleep 20
+            done
+          done < pkgs/list.txt
+          echo "descargados: $(ls pkgs/*.tar.zst 2>/dev/null | wc -l)"
+          du -sh pkgs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Construir ISO (live/make-live.sh)
         run: |
-          bash live/make-live.sh "$(pwd)/incoming/rootfs-base.tar.zst"
+          bash live/make-live.sh "$(pwd)/incoming/rootfs-base.tar.zst" "$(pwd)/pkgs"
 
-      - name: Test QEMU + OVMF hasta login (consola serial)
+      - name: Test QEMU + OVMF hasta greetd (consola serial, autologin)
         run: |
           # Ruta OVMF COMBINADA — igual que base/qemu-test.sh (que sí bootea):
           # apt pone la imagen en /usr/share/ovmf/OVMF.fd; con -bios combinado
@@ -63,7 +86,8 @@ jobs:
           [ -n "$OVMF" ] || { echo "no se encontró firmware OVMF"; exit 1; }
           echo "OVMF: $OVMF"
           mkdir -p serial && : > serial/console.log
-          timeout 600 qemu-system-x86_64 \
+          # 900s: la ISO v2 (rootfs+paquetes, squashfs ~3GB) tarda más en montar
+          timeout 900 qemu-system-x86_64 \
             -machine q35 -cpu max -m 4096 -smp 2 \
             -bios "$OVMF" \
             -cdrom mylfs-live.iso \
@@ -71,32 +95,37 @@ jobs:
             -serial file:serial/console.log \
             -netdev user,id=n0 -device e1000,netdev=n0 2>&1 | tail -5
           echo "=== últimas líneas del serial ==="
-          tail -20 serial/console.log
-          grep -q "login:" serial/console.log && echo "QEMU ARRANCÓ HASTA LOGIN ✓" || {
-            echo "no llegó al login"; tail -40 serial/console.log; exit 1; }
+          tail -30 serial/console.log
+          # FASE 3: autologin en ttyS0 imprime el marker con el estado de los
+          # servicios (ver make-live.sh /etc/profile.d/mylfs-live-check.sh).
+          grep -q "MYLFS_LIVE_READY" serial/console.log || {
+            echo "no hubo autologin por serial"; tail -60 serial/console.log; exit 1; }
+          grep -q "MYLFS_SVC greetd: run:" serial/console.log && \
+            echo "QEMU ARRANCÓ HASTA GREETD ✓" || {
+            echo "greetd no está corriendo"; grep "MYLFS_SVC" serial/console.log; tail -60 serial/console.log; exit 1; }
 
-      - name: Release live-vN (tras QEMU verde)
+      - name: Release live-v2 (tras QEMU verde)
         if: github.ref == 'refs/heads/main'
         run: |
           SIZE=$(stat -c%s mylfs-live.iso)
           echo "tamaño ISO: $SIZE bytes"
           if [ "$SIZE" -lt 1900000000 ]; then
             # mylfs-live.iso.sha256 ya lo generó make-live.sh en el cwd
-            gh release view live-v1 -R mikuri12/mylfs >/dev/null 2>&1 || \
-              gh release create live-v1 -R mikuri12/mylfs \
-                --title "mylfs-live v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
+            gh release view live-v2 -R mikuri12/mylfs >/dev/null 2>&1 || \
+              gh release create live-v2 -R mikuri12/mylfs \
+                --title "mylfs-live v2 — LFS 12.4 + kernel 7.1.5-mikuri + escritorio (greetd/Noctalia/Halley)" \
                 --notes-file live/RELEASE-NOTES.md
-            gh release upload live-v1 -R mikuri12/mylfs --clobber \
+            gh release upload live-v2 -R mikuri12/mylfs --clobber \
               mylfs-live.iso mylfs-live.iso.sha256
           else
             split -b 1900M -d mylfs-live.iso mylfs-live.iso.part
             sha256sum mylfs-live.iso mylfs-live.iso.part* | sudo tee mylfs-live.iso.sha256 > /dev/null
             sudo chown runner:runner mylfs-live.iso.part* mylfs-live.iso.sha256
-            gh release view live-v1 -R mikuri12/mylfs >/dev/null 2>&1 || \
-              gh release create live-v1 -R mikuri12/mylfs \
-                --title "mylfs-live v1 — LFS 12.4 + kernel 7.1.5-mikuri" \
+            gh release view live-v2 -R mikuri12/mylfs >/dev/null 2>&1 || \
+              gh release create live-v2 -R mikuri12/mylfs \
+                --title "mylfs-live v2 — LFS 12.4 + kernel 7.1.5-mikuri + escritorio (greetd/Noctalia/Halley)" \
                 --notes-file live/RELEASE-NOTES.md
-            gh release upload live-v1 -R mikuri12/mylfs --clobber \
+            gh release upload live-v2 -R mikuri12/mylfs --clobber \
               mylfs-live.iso.part* mylfs-live.iso.sha256
           fi
         env:
