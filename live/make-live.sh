@@ -32,6 +32,35 @@ sudo tar --zstd -xpf "$ROOTFS_TAR" -C "$WORK" --numeric-owner --keep-directory-s
 sudo mv "$WORK/lfs" "$WORK/rootfs"
 
 # ============================================================================
+# 1b) Paquetes del escritorio (Release 'packages' de mymypkgs) — FASE 3
+#     PKGS_DIR (2º arg): .tar.zst descargados por el workflow. Se extraen
+#     sobre el rootfs ANTES de montar los vfs: /var/run -> /run y con tmpfs
+#     montado en run/, tar falla con EXDEV ("Invalid cross-device link") al
+#     crear ./var/run/dbus (run live 43127886452). Sin mounts no hay cruce.
+#     Las deps ya se resolvieron al compilar en capas: el orden no importa.
+#     linux-mikuri NO se instala: el kernel ya viene en el rootfs.
+# ============================================================================
+if [ -n "$PKGS_DIR" ] && ls "$PKGS_DIR"/*.tar.zst >/dev/null 2>&1; then
+  step "instalar paquetes mymypkgs ($(ls "$PKGS_DIR"/*.tar.zst 2>/dev/null | wc -l) tarballs)"
+  n=0
+  for p in "$PKGS_DIR"/*.tar.zst; do
+    case "$(basename "$p")" in linux-mikuri-*) continue ;; esac
+    sudo tar --zstd -xpf "$p" -C "$WORK/rootfs" --numeric-owner --keep-directory-symlink
+    rm -f "$p"   # liberar disco del runner tras extraer
+    n=$((n+1))
+  done
+  echo "instalados $n paquetes en el rootfs"
+  # ldconfig con -r (sin chroot: todavía no hay vfs montados)
+  sudo ldconfig -r "$WORK/rootfs" 2>/dev/null || true
+  sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
+    PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
+    bash -e -c 'command -v fc-cache >/dev/null 2>&1 && fc-cache -f >/dev/null 2>&1 || true; true'
+  step "paquetes OK + ldconfig"
+else
+  step "sin PKGS_DIR: ISO solo con rootfs base (live-v1)"
+fi
+
+# ============================================================================
 # 2) Kernel: ya viene en el rootfs (boot/vmlinuz-7.1.5-mikuri)
 # ============================================================================
 step "kernel (del rootfs)"
@@ -96,31 +125,6 @@ DMEOF
 # VERIFY: dmsetup presente en el chroot (dracut módulo dm lo exige)
 sudo test -x "$WORK/rootfs/usr/sbin/dmsetup" || { echo "dmsetup no instalado"; exit 1; }
 step "dmsetup OK"
-
-# ============================================================================
-# 3b) Paquetes del escritorio (Release 'packages' de mymypkgs) — FASE 3
-#     PKGS_DIR (2º arg): .tar.zst descargados por el workflow. Se extraen
-#     sobre el rootfs (las deps ya se resolvieron al compilar en capas, así
-#     que el orden de extracción no importa) y ldconfig al final.
-#     linux-mikuri NO se instala: el kernel ya viene en el rootfs.
-# ============================================================================
-if [ -n "$PKGS_DIR" ] && ls "$PKGS_DIR"/*.tar.zst >/dev/null 2>&1; then
-  step "instalar paquetes mymypkgs ($(ls "$PKGS_DIR"/*.tar.zst 2>/dev/null | wc -l) tarballs)"
-  n=0
-  for p in "$PKGS_DIR"/*.tar.zst; do
-    case "$(basename "$p")" in linux-mikuri-*) continue ;; esac
-    sudo tar --zstd -xpf "$p" -C "$WORK/rootfs" --numeric-owner --keep-directory-symlink
-    rm -f "$p"   # liberar disco del runner tras extraer
-    n=$((n+1))
-  done
-  echo "instalados $n paquetes en el rootfs"
-  sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
-    PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
-    bash -e -c 'ldconfig 2>/dev/null || true; command -v fc-cache >/dev/null 2>&1 && fc-cache -f >/dev/null 2>&1 || true; true'
-  step "paquetes OK + ldconfig"
-else
-  step "sin PKGS_DIR: ISO solo con rootfs base (live-v1)"
-fi
 
 # ============================================================================
 # 3c) Sesión de escritorio — FASE 3: greetd + noctalia-greeter + runit
