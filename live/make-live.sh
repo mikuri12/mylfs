@@ -168,13 +168,19 @@ printf '%s\n' '[terminal]' 'vt = 1' '' '[default_session]' \
 for s in seatd turnstiled dbus greetd; do
   [ -d "/etc/sv/$s" ] && ln -sf "/etc/sv/$s" /etc/runit/runsvdir/default/
 done
-# marker para el test QEMU por consola serial (autologin imprime estado)
+# marker para el test QEMU por consola serial (autologin imprime estado).
+# OJO: 'sv status' como usuario no-root da "access denied" (supervise/ es
+# 0700 de root) → usar pgrep (procps de la base), legible por todos.
+# El servicio dbus corre como proceso 'dbus-daemon'.
 install -d -m755 /etc/profile.d
 printf '%s\n' \
   '#!/bin/sh' \
   'echo "MYLFS_LIVE_READY tty=$(tty 2>/dev/null)"' \
   'for s in seatd turnstiled dbus greetd; do' \
-  '  printf "MYLFS_SVC %s: %s\n" "$s" "$(sv status /etc/sv/$s 2>&1 | head -1)"' \
+  '  p=$s; [ "$s" = dbus ] && p=dbus-daemon' \
+  '  pid=$(pgrep -x "$p" 2>/dev/null | head -1)' \
+  '  if [ -n "$pid" ]; then printf "MYLFS_SVC %s: run: (pid %s)\n" "$s" "$pid";' \
+  '  else printf "MYLFS_SVC %s: down\n" "$s"; fi' \
   'done' \
   > /etc/profile.d/mylfs-live-check.sh
 chmod 755 /etc/profile.d/mylfs-live-check.sh
