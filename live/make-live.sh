@@ -33,28 +33,35 @@ sudo mv "$WORK/lfs" "$WORK/rootfs"
 
 # ============================================================================
 # 1b) Paquetes del escritorio (Release 'packages' de mymypkgs) — FASE 3
-#     PKGS_DIR (2º arg): .tar.zst descargados por el workflow. Se extraen
-#     sobre el rootfs ANTES de montar los vfs: /var/run -> /run y con tmpfs
-#     montado en run/, tar falla con EXDEV ("Invalid cross-device link") al
-#     crear ./var/run/dbus (run live 43127886452). Sin mounts no hay cruce.
-#     Las deps ya se resolvieron al compilar en capas: el orden no importa.
-#     linux-mikuri NO se instala: el kernel ya viene en el rootfs.
+#     PKGS_DIR (2º arg): .tar.zst descargados por el workflow.
+#     SE EXTRAEN DENTRO DEL CHROOT: /var/run -> /run es un symlink ABSOLUTO;
+#     con 'tar -C rootfs' el kernel resuelve /run al del HOST (tmpfs) y falla
+#     con EXDEV "Invalid cross-device link" (runs 43127886452/43131507506).
+#     Dentro del chroot el symlink resuelve a rootfs/run (mismo fs) → OK.
+#     linux-mikuri NO: el kernel ya viene en el rootfs.
 # ============================================================================
 if [ -n "$PKGS_DIR" ] && ls "$PKGS_DIR"/*.tar.zst >/dev/null 2>&1; then
-  step "instalar paquetes mymypkgs ($(ls "$PKGS_DIR"/*.tar.zst 2>/dev/null | wc -l) tarballs)"
-  n=0
-  for p in "$PKGS_DIR"/*.tar.zst; do
-    case "$(basename "$p")" in linux-mikuri-*) continue ;; esac
-    sudo tar --zstd -xpf "$p" -C "$WORK/rootfs" --numeric-owner --keep-directory-symlink
-    rm -f "$p"   # liberar disco del runner tras extraer
-    n=$((n+1))
-  done
-  echo "instalados $n paquetes en el rootfs"
-  # ldconfig con -r (sin chroot: todavía no hay vfs montados)
-  sudo ldconfig -r "$WORK/rootfs" 2>/dev/null || true
+  step "instalar paquetes mymypkgs ($(ls "$PKGS_DIR"/*.tar.zst 2>/dev/null | wc -l) tarballs, en chroot)"
+  sudo mkdir -p "$WORK/rootfs/packages"
+  sudo cp "$PKGS_DIR"/*.tar.zst "$WORK/rootfs/packages/"
+  rm -f "$PKGS_DIR"/*.tar.zst   # liberar disco del runner ya
   sudo chroot "$WORK/rootfs" /usr/bin/env -i HOME=/root TERM="$TERM" \
     PATH=/usr/bin:/usr/sbin LC_ALL=POSIX \
-    bash -e -c 'command -v fc-cache >/dev/null 2>&1 && fc-cache -f >/dev/null 2>&1 || true; true'
+    bash -e -c '
+      set -euo pipefail
+      n=0
+      for p in /packages/*.tar.zst; do
+        case "$(basename "$p")" in linux-mikuri-*) continue ;; esac
+        tar --zstd -xpf "$p" -C / --numeric-owner --keep-directory-symlink
+        rm -f "$p"
+        n=$((n+1))
+      done
+      echo "instalados $n paquetes en el rootfs"
+      ldconfig 2>/dev/null || true
+      command -v fc-cache >/dev/null 2>&1 && fc-cache -f >/dev/null 2>&1 || true
+      rm -rf /packages
+      true
+    '
   step "paquetes OK + ldconfig"
 else
   step "sin PKGS_DIR: ISO solo con rootfs base (live-v1)"
