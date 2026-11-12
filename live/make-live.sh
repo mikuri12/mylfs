@@ -169,6 +169,7 @@ for s in seatd turnstiled dbus greetd; do
   [ -d "/etc/sv/$s" ] && ln -sf "/etc/sv/$s" /etc/runit/runsvdir/default/
 done
 # marker para el test QEMU por consola serial (autologin imprime estado)
+install -d -m755 /etc/profile.d
 printf '%s\n' \
   '#!/bin/sh' \
   'echo "MYLFS_LIVE_READY tty=$(tty 2>/dev/null)"' \
@@ -177,6 +178,11 @@ printf '%s\n' \
   'done' \
   > /etc/profile.d/mylfs-live-check.sh
 chmod 755 /etc/profile.d/mylfs-live-check.sh
+# la base LFS no hace source de profile.d: añadir el loop a /etc/profile
+grep -q 'profile.d' /etc/profile || printf '%s\n' \
+  'for i in /etc/profile.d/*.sh; do' \
+  '  [ -r "$i" ] && . "$i"' \
+  'done' >> /etc/profile
 SESEOF
 step "sesión OK"
 
